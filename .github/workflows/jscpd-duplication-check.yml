@@ -72,7 +72,8 @@ jobs:
         uses: octokit/request-action@v2.x
         with:
           route: GET /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews
-          github-token: ${{ secrets.github-token }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.github-token }}
 
       - name: Determine reviewers approval status
         id: reviewers
