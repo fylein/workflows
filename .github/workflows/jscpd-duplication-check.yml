@@ -39,6 +39,7 @@ jobs:
       DUPLICATION_THRESHOLD: ${{ inputs.duplication_threshold }}
       REVIEWER_1: ${{ inputs.reviewer_1 }}
       REVIEWER_2: ${{ inputs.reviewer_2 }}
+      GITHUB_TOKEN: ${{ secrets.github-token }}
 
     steps:
       - uses: actions/checkout@v4
@@ -72,7 +73,8 @@ jobs:
         uses: octokit/request-action@v2.x
         with:
           route: GET /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews
-          GITHUB_TOKEN: ${{ secrets.github-token }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Determine reviewers approval status
         id: reviewers
