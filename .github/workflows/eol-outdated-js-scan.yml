@@ -7,6 +7,7 @@ on:
         description: 'Path to the suppression.xml file'
         required: false
         default: ''
+        type: string
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
