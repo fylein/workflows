@@ -32,7 +32,7 @@ jobs:
   duplication-check:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write 
+      pull-requests: write
       contents: read
 
     env:
@@ -70,15 +70,20 @@ jobs:
 
       - name: Check PR approvals for bypass
         id: approvals
-        uses: octokit/request-action@v2.x
+        uses: actions/github-script@v7
         with:
-          route: GET /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews
-          token: ${{ env.GITHUB_TOKEN }}
+          script: |
+            const { data } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            return data;
 
       - name: Determine reviewers approval status
         id: reviewers
         run: |
-          echo '${{ steps.approvals.outputs.data }}' > reviews.json
+          echo '${{ steps.approvals.outputs.result }}' > reviews.json
           echo "Full reviews data:"
           cat reviews.json
           approved=$(jq -r "map(select(.state == \"APPROVED\" and (.user.login == env.REVIEWER_1 or .user.login == env.REVIEWER_2))) | length > 0" reviews.json)
