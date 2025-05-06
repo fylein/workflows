@@ -7,6 +7,10 @@ on:
         description: 'Path to the suppression.xml file'
         required: false
         type: string
+      npm-run-cmd:
+        description: 'NPM command to run'
+        required: true
+        type: string
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -31,6 +35,8 @@ jobs:
           filters: |
             dependencies:
               - 'package-lock.json'
+              - 'app-v2/package-lock.json'
+              - '**/bower_components/**'
               - 'suppression.xml'
 
   scan:
@@ -60,7 +66,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.node-cache.outputs.cache-hit != 'true'
-        run: npm ci
+        run: ${{ inputs.npm-run-cmd }}
 
       - name: Run EOL/Outdated JS Scan
         uses: fylein/eol-outdated-js-scan-action@master
