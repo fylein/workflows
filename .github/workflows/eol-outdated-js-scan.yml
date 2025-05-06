@@ -1,20 +1,19 @@
 name: EOL JS Scan (Reusable)
 
-inputs:
-  github-token:
-    description: 'GitHub token for creating/updating comments'
-    required: true
-  suppression:
-    description: 'Path to the suppression.xml file'
-    required: false
-    default: ''
-  nvd-api-key:
-    description: 'NVD API key for the dependency check'
-    required: false
-    default: ''
-
 on:
   workflow_call:
+    inputs:
+      suppression:
+        description: 'Path to the suppression.xml file'
+        required: false
+        type: string
+    secrets:
+      github-token:
+        description: 'GitHub token for creating/updating comments'
+        required: true
+      nvd-api-key:
+        description: 'NVD API key for the dependency check'
+        required: false
 
 jobs:
   filter:
