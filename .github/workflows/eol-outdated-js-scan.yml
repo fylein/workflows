@@ -14,7 +14,6 @@ on:
       nvd-api-key:
         description: 'NVD API key for the dependency check'
         required: false
-        default: ''
 
 jobs:
   filter:
