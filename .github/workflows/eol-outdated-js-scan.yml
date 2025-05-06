@@ -6,7 +6,6 @@ on:
       suppression:
         description: 'Path to the suppression.xml file'
         required: false
-        default: ''
         type: string
     secrets:
       github-token:
