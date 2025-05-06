@@ -1,0 +1,58 @@
+name: EOL JS Scan (Reusable)
+
+on:
+  workflow_call:
+    secrets:
+      github-token:
+        required: true
+
+jobs:
+  filter:
+    name: Get changed files
+    runs-on: ubuntu-latest
+
+    outputs:
+      run-scan: ${{ steps.filter.outputs.dependencies }}
+
+    steps:
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            dependencies:
+              - 'package-lock.json'
+
+  scan:
+    name: Run EOL/Outdated JS Scanner
+    needs: filter
+    if: needs.filter.outputs.run-scan == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.17.0
+
+      - name: Cache node_modules
+        id: node-cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Run EOL/Outdated JS Scan
+        uses: fylein/eol-outdated-js-scan-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
