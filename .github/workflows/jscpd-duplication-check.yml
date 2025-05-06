@@ -69,22 +69,28 @@ jobs:
             });
 
       - name: Check PR approvals for bypass
-        id: approvals
-        uses: octokit/request-action@v2.x
-        with:
-          route: GET /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
-
-      - name: Determine reviewers approval status
         id: reviewers
-        run: |
-          echo '${{ steps.approvals.outputs.data }}' > reviews.json
-          echo "Full reviews data:"
-          cat reviews.json
-          approved=$(jq -r "map(select(.state == \"APPROVED\" and (.user.login == env.REVIEWER_1 or .user.login == env.REVIEWER_2))) | length > 0" reviews.json)
-          echo "Approval check result: $approved"
-          echo "approved_by_reviewer=$approved" >> "$GITHUB_OUTPUT"
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const reviews = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            });
+
+            const reviewer1 = process.env.REVIEWER_1.toLowerCase();
+            const reviewer2 = process.env.REVIEWER_2.toLowerCase();
+
+            const approved = reviews.data.some(r => 
+              r.state === "APPROVED" && 
+              [reviewer1, reviewer2].includes(r.user.login.toLowerCase())
+            );
+
+            core.setOutput('approved_by_reviewer', approved);
+            return approved;
 
       - name: Comment if duplication > threshold and not approved
         if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
