@@ -61,7 +61,7 @@ jobs:
           script: |
             const fs = require('fs');
             const report = JSON.parse(fs.readFileSync('report/jscpd-report.json', 'utf8'));
-            const summary = `### 🔁 Code Duplication Report - ${inputs.tech_stack}\n**Duplicated Code:** ${report.statistics.total.percentageTokens}%\n`;
+            const summary = `### 🔁 Code Duplication Report - ${{inputs.tech_stack}}\n**Duplicated Code:** ${report.statistics.total.percentageTokens}%\n`;
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
@@ -98,7 +98,7 @@ jobs:
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: `❌ ${inputs.tech_stack} Duplication threshold crosses beyond ${inputs.duplication_threshold}%. Please check for potential code duplication. If it is critical, please take approvals from **${inputs.reviewer_1}** or **${inputs.reviewer_2}** for merging the pull request. Once approved, you can re-run the workflow.`
+              body: `❌ ${{inputs.tech_stack}} Duplication threshold crosses beyond ${inputs.duplication_threshold}%. Please check for potential code duplication. If it is critical, please take approvals from **${inputs.reviewer_1}** or **${inputs.reviewer_2}** for merging the pull request. Once approved, you can re-run the workflow.`
             });
 
       - name: Fail if duplication > threshold and not approved
