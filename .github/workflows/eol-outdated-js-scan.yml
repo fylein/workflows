@@ -22,6 +22,7 @@ jobs:
           filters: |
             dependencies:
               - 'package-lock.json'
+              - 'suppression.xml'
 
   scan:
     name: Run EOL/Outdated JS Scanner
@@ -56,3 +57,4 @@ jobs:
         uses: fylein/eol-outdated-js-scan-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          suppression: 'suppression.xml'
