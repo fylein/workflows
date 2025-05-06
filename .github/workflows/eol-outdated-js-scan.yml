@@ -15,9 +15,6 @@ inputs:
 
 on:
   workflow_call:
-    secrets:
-      github-token:
-        required: true
 
 jobs:
   filter:
