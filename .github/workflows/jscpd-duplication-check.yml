@@ -46,6 +46,7 @@ jobs:
       - name: Run jscpd for ${{ inputs.tech_stack }}
         run: |
           ${{ inputs.command_to_run }}
+          cat report/jscpd-report.json
 
       - name: Extract duplication percentage - ${{ inputs.tech_stack }}
         id: duplication
