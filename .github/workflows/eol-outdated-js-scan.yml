@@ -58,3 +58,4 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           suppression: 'suppression.xml'
+          nvd-api-key: ${{ secrets.NVD_API_KEY }}
