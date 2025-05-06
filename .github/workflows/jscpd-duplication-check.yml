@@ -1,0 +1,102 @@
+name: Jscpd Duplication Check
+
+on:
+  workflow_call:
+    inputs:
+      duplication_threshold:
+        description: 'Threshold percentage for code duplication'
+        required: true
+        type: number
+      reviewer_1:
+        description: 'First reviewer who can approve high duplication PRs'
+        required: true
+        type: string
+      reviewer_2:
+        description: 'Second reviewer who can approve high duplication PRs'
+        required: true
+        type: string
+      tech_stack:
+        description: 'Tech stack to check for duplication'
+        required: true
+        type: string
+      command_to_run:
+        description: 'Command to run JSCPD'
+        required: true
+        type: string
+    secrets:
+      github-token:
+        description: 'GitHub token for creating/updating comments'
+        required: true
+
+jobs:
+  duplication-check:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write 
+      contents: read
+
+    env:
+      DUPLICATION_THRESHOLD: ${{ inputs.duplication_threshold }}
+      REVIEWER_1: ${{ inputs.reviewer_1 }}
+      REVIEWER_2: ${{ inputs.reviewer_2 }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run jscpd for ${{ inputs.tech_stack }}
+        run: |
+          ${{ inputs.command_to_run }}
+
+      - name: Extract duplication percentage - ${{ inputs.tech_stack }}
+        id: duplication
+        run: |
+          percent=$(jq .statistics.total.percentageTokens report/jscpd-report.json)
+          echo "duplication=$percent" >> "$GITHUB_OUTPUT"
+
+      - name: Post duplication comment - ${{ inputs.tech_stack }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('report/jscpd-report.json', 'utf8'));
+            const summary = `### 🔁 Code Duplication Report - ${process.env.TECH_STACK}\n**Duplicated Code:** ${report.statistics.total.percentageTokens}%\n`;
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+
+      - name: Check PR approvals for bypass
+        id: approvals
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews
+        env:
+          github-token: ${{ secrets.github-token }}
+
+      - name: Determine reviewers approval status
+        id: reviewers
+        run: |
+          echo '${{ steps.approvals.outputs.data }}' > reviews.json
+          echo "Full reviews data:"
+          cat reviews.json
+          approved=$(jq -r "map(select(.state == \"APPROVED\" and (.user.login == env.REVIEWER_1 or .user.login == env.REVIEWER_2))) | length > 0" reviews.json)
+          echo "Approval check result: $approved"
+          echo "approved_by_reviewer=$approved" >> "$GITHUB_OUTPUT"
+
+      - name: Comment if duplication > threshold and not approved
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `❌ ${process.env.TECH_STACK} Duplication threshold crosses beyond ${process.env.DUPLICATION_THRESHOLD}%. Please check for potential code duplication. If it is critical, please take approvals from **${process.env.REVIEWER_1}** or **${process.env.REVIEWER_2}** for merging the pull request. Once approved, you can re-run the workflow.`
+            });
+
+      - name: Fail if duplication > threshold and not approved
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        run: |
+          echo "Duplication threshold crosses beyond ${DUPLICATION_THRESHOLD}%. Please check for potential code duplication. If it is critical, please take approvals from ${REVIEWER_1} or ${REVIEWER_2} for merging the pull request. Once approved, you can re-run the workflow."
+          exit 1
