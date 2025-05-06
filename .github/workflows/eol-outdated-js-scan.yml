@@ -1,5 +1,18 @@
 name: EOL JS Scan (Reusable)
 
+inputs:
+  github-token:
+    description: 'GitHub token for creating/updating comments'
+    required: true
+  suppression:
+    description: 'Path to the suppression.xml file'
+    required: false
+    default: ''
+  nvd-api-key:
+    description: 'NVD API key for the dependency check'
+    required: false
+    default: ''
+
 on:
   workflow_call:
     secrets:
@@ -56,6 +69,6 @@ jobs:
       - name: Run EOL/Outdated JS Scan
         uses: fylein/eol-outdated-js-scan-action@master
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          suppression: 'suppression.xml'
-          nvd-api-key: ${{ secrets.NVD_API_KEY }}
+          github-token: ${{ inputs.github-token }}
+          suppression: ${{ inputs.suppression }}
+          nvd-api-key: ${{ inputs.nvd-api-key }}
