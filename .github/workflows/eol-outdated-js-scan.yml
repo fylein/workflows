@@ -65,6 +65,6 @@ jobs:
       - name: Run EOL/Outdated JS Scan
         uses: fylein/eol-outdated-js-scan-action@master
         with:
-          github-token: ${{ inputs.github-token }}
+          github-token: ${{ secrets.github-token }}
           suppression: ${{ inputs.suppression }}
-          nvd-api-key: ${{ inputs.nvd-api-key }}
+          nvd-api-key: ${{ secrets.nvd-api-key }}
