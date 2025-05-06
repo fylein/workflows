@@ -3,14 +3,15 @@ name: EOL JS Scan (Reusable)
 on:
   workflow_call:
     inputs:
-      github-token:
-        description: 'GitHub token for creating/updating comments'
-        required: true
-        type: string
       suppression:
         description: 'Path to the suppression.xml file'
         required: false
         default: ''
+        type: string
+    secrets:
+      github-token:
+        description: 'GitHub token for creating/updating comments'
+        required: true
         type: string
       nvd-api-key:
         description: 'NVD API key for the dependency check'
