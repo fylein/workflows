@@ -69,7 +69,7 @@ jobs:
             `;
 
             // Add rows for each format
-            const formatRows = Object.entries(report.formats || {}).map(([format, stats]) => {
+            const formatRows = Object.entries(report.statistics.formats || {}).map(([format, stats]) => {
               return `| ${format} | ${stats.sources} | ${stats.lines} | ${stats.tokens} | ${stats.clones} | ${stats.duplicatedLines} (${stats.percentage}%) | ${stats.duplicatedTokens} (${stats.percentageTokens}%) |`;
             }).join('\n');
 
