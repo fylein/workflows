@@ -61,11 +61,28 @@ jobs:
           script: |
             const fs = require('fs');
             const report = JSON.parse(fs.readFileSync('report/jscpd-report.json', 'utf8'));
-            const summary = `### 🔁 Code Duplication Report - ${{inputs.tech_stack}}\n**Duplicated Code:** ${report.statistics.total.percentageTokens}%\n`;
+            const summary = `
+              ### 🔁 Code Duplication Report - ${{inputs.tech_stack}}
+
+              | Format | Files analyzed | Total lines | Total tokens | Clones found | Duplicated lines | Duplicated tokens |
+              |--------|----------------|-------------|--------------|--------------|------------------|------------------|
+            `;
+
+            // Add rows for each format
+            const formatRows = Object.entries(report.statistics.formats || {}).map(([format, stats]) => {
+              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} (${stats.total.percentage}%) | ${stats.total.duplicatedTokens} (${stats.total.percentageTokens}%) |`;
+            }).join('\n');
+
+            // Add total row
+            const total = report.statistics.total;
+            const totalRow = `| **Total:** | ${total.sources} | ${total.lines} | ${total.tokens} | ${total.clones} | ${total.duplicatedLines} (${total.percentage}%) | ${total.duplicatedTokens} (${total.percentageTokens}%) |`;
+
+            const fullSummary = `${summary}${formatRows}\n${totalRow}`;
+
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: summary
+              body: fullSummary
             });
 
       - name: Check PR approvals for bypass
