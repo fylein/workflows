@@ -70,7 +70,7 @@ jobs:
 
             // Add rows for each format
             const formatRows = Object.entries(report.statistics.formats || {}).map(([format, stats]) => {
-              return `| ${format} | ${stats.sources} | ${stats.lines} | ${stats.tokens} | ${stats.clones} | ${stats.duplicatedLines} (${stats.percentage}%) | ${stats.duplicatedTokens} (${stats.percentageTokens}%) |`;
+              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} (${stats.total.percentage}%) | ${stats.total.duplicatedTokens} (${stats.total.percentageTokens}%) |`;
             }).join('\n');
 
             // Add total row
