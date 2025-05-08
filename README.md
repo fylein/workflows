@@ -46,8 +46,7 @@ If the JSCPD workflow fails, it means your code has exceeded the configured dupl
    - Consider adding comments in the code explaining why similar patterns exist.
    - Request reviewer approval with detailed justification.
 
-2. **Third-Party Code**: If your project includes third-party libraries that contain duplication:
-   - Exclude vendor directories from the scan.
+2. **Third-Party Code**: If your project includes third-party libraries that contain duplication, exclude vendor directories from the scan.
 
 ## EOL/Outdated JS Scan
 
