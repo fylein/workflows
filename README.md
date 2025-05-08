@@ -75,7 +75,7 @@ If you are assigned as a reviewer on a pull request where the JSCPD duplication 
 
     - Rationale for the duplication (e.g., performance optimization, unavoidable framework constraints).
     - Why existing abstractions (shared utilities/components) were not used.
-    - If this is a critical fix which needs to be shipped urgently, you can approve the PR. Ask the author to create a ClickUp task for future cleanup. The author will add a `TODO:` comment referencing the ClickUp task ID.
+    - If this is a critical fix which needs to be shipped urgently, you can approve the PR.
 
 2. Evaluate the duplication. Perform a code-level review of the duplicated sections:
 
