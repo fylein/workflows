@@ -83,7 +83,7 @@ If the EOL/Outdated JS Scan fails, follow these steps:
 
 3. If certain vulnerabilities need to be temporarily suppressed:
 - Update the suppression.xml file (if configured) to exclude specific known issues
-- Document why the suppression is necessary and create a clickup task to address it properly in the future
+- Document why the suppression is necessary
 
 ## Configuration
 
