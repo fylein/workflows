@@ -28,7 +28,7 @@ By detecting and limiting code duplication, this workflow helps maintain a clean
 
 If the JSCPD workflow fails, it means your code has exceeded the configured duplication threshold. You should:
 
-1. Review the duplication report in the PR comments to identify duplicated code sections. Alternatively, you can run the command mentioned in the workflow inputs to check the duplicated files in your local system.
+1. Review the duplication report in the PR comments to identify duplicated code sections. Alternatively, you can run the command mentioned in the workflow [inputs](https://github.com/fylein/fyle-app/blob/master/.github/workflows/jscpd-duplication-check.yml) to check the duplicated files in your local system.
 
 2. Refactor the duplicated code by:
 - Creating reusable functions or components.
