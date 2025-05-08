@@ -83,7 +83,7 @@ If you are assigned as a reviewer on a pull request where the JSCPD duplication 
     - Are there framework-specific patterns (e.g., Angular decorators, lifecycle hooks) that cause unavoidable duplication?
     - Are these duplicated blocks used in different scopes or modules that make unification non-trivial?
 
-3. Request changes if the duplication is avoidable.
+3. Request changes if the duplication is avoidable. The idea is to not increase the duplication threshold wherever possible.
 
 ### Edge Cases and Troubleshooting
 
