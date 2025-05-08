@@ -39,6 +39,18 @@ If the JSCPD workflow fails, it means your code has exceeded the configured dupl
 - Get approval from one of the designated reviewers (specified in the workflow inputs).
 - Once approved, re-run the workflow - it will pass if approved by an authorized reviewer.
 
+### Edge Cases and Troubleshooting
+
+1. **False Positives**: JSCPD may flag code that appears similar but serves different purposes. In such cases:
+   - Document why the duplication is necessary in your PR description
+   - Consider adding comments in the code explaining why similar patterns exist
+   - Request reviewer approval with detailed justification
+
+2. **Third-Party Code**: If your project includes third-party libraries that contain duplication:
+   - Exclude vendor directories from the scan
+   - Document these exclusions in your project documentation
+   - Consider using package managers instead of including third-party code directly
+
 ## EOL/Outdated JS Scan
 
 ### What It Does
