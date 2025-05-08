@@ -24,6 +24,34 @@ Code duplication is a common issue that can lead to:
 
 By detecting and limiting code duplication, this workflow helps maintain a cleaner, more maintainable codebase.
 
+### How to Use in your repository
+
+Add the following to your workflow file:
+
+```yaml
+jobs:
+  call-jscpd-duplication-check:
+    uses: fylein/workflows/.github/workflows/jscpd-duplication-check.yml@v1
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+    with:
+      duplication_threshold: 10
+      reviewer_1: 'Dimple16'
+      reviewer_2: 'rvab'
+      tech_stack: 'AngularJS'
+      command_to_run: 'npx jscpd --ignore "**/node_modules/**" --output report --reporters json'
+```
+
+**Inputs** - Inputs are passed to the workflow with the `with` keyword. 
+- `duplication_threshold` (number): The duplication threshold percentage above which the workflow will fail.
+- `reviewer_1` (string): The first reviewer's GitHub username.
+- `reviewer_2` (string): The second reviewer's GitHub username.
+- `tech_stack` (string): The tech stack name (e.g., AngularJS, Angular, etc.)
+- `command_to_run` (string): The command to run the JSCPD duplication check.
+
+**Secrets** - Secrets are passed to the workflow with the `secrets` keyword.
+- `github-token`: A GitHub token to create or update PR comments with scan results. Typically passed as: secrets.GITHUB_TOKEN.
+
 ### What To Do If It Fails
 
 If the JSCPD workflow fails, it means your code has exceeded the configured duplication threshold. You should:
@@ -38,6 +66,25 @@ If the JSCPD workflow fails, it means your code has exceeded the configured dupl
 3. If the duplication is unavoidable or intentional:
     - Get approval from one of the designated reviewers (specified in the workflow inputs).
     - Once approved, re-run the workflow - it will pass if approved by an authorized reviewer.
+
+### Reviewer's Guide
+
+If you are assigned as a reviewer on a pull request where the JSCPD duplication check fails, your responsibility is to ensure duplication is either justified or resolved. Follow this checklist to maintain technical integrity:
+
+1. Request Technical Justification from the Author. Ask the author to explain why the duplication threshold was breached. Ensure the PR description includes:
+
+    - Rationale for the duplication (e.g., performance optimization, unavoidable framework constraints).
+    - Why existing abstractions (shared utilities/components) were not used.
+    - If this is a critical fix which needs to be shipped urgently, you can approve the PR. Ask the author to create a ClickUp task for future cleanup. The author will add a `TODO:` comment referencing the ClickUp task ID.
+
+2. Evaluate the duplication. Perform a code-level review of the duplicated sections:
+
+    - Can the code be abstracted into a shared module, function, service, or component?
+    - Would refactoring reduce duplication without hurting clarity or introducing performance issues?
+    - Are there framework-specific patterns (e.g., Angular decorators, lifecycle hooks) that cause unavoidable duplication?
+    - Are these duplicated blocks used in different scopes or modules that make unification non-trivial?
+
+3. Request changes if the duplication is avoidable.
 
 ### Edge Cases and Troubleshooting
 
@@ -66,6 +113,32 @@ Using outdated or end-of-life JavaScript libraries poses significant risks:
 
 This workflow helps ensure your project uses maintained and secure dependencies.
 
+### How to Use in your repository
+
+Add the following to your workflow file:
+
+```yaml
+jobs:
+  call-eol-scan:
+    uses: fylein/workflows/.github/workflows/eol-outdated-js-scan.yml@v1
+    name: Run scanner
+    with:
+      npm-run-cmd: 'npm ci && cd app-v2 && npm ci'
+      suppression: 'suppression.xml'
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      nvd-api-key: ${{ secrets.NVD_API_KEY }}
+```
+
+**Inputs** - Inputs are passed to the workflow with the `with` keyword. 
+- `npm-run-cmd` (string): The NPM command to install dependencies (e.g., npm ci or npm install) for example: 'npm ci'.
+
+- `suppression` (string): Path to a suppression.xml file that lists known/accepted vulnerabilities to ignore during the scan, for example ['suppression.xml'](https://github.com/fylein/fyle-app/blob/master/suppression.xml). This is an optional input and you can skip it if you don't have a suppression file.
+
+**Secrets** - Secrets are passed to the workflow with the `secrets` keyword.
+- `github-token`: A GitHub token to create or update PR comments with scan results. Typically passed as: secrets.GITHUB_TOKEN.
+- `nvd-api-key`: A key for querying the National Vulnerability Database for CVE data. Typically passed as: secrets.NVD_API_KEY.
+
 ### What To Do If It Fails
 
 If the EOL/Outdated JS Scan fails, follow these steps:
@@ -81,6 +154,14 @@ If the EOL/Outdated JS Scan fails, follow these steps:
 3. If certain vulnerabilities need to be temporarily suppressed:
     - Update the suppression.xml file (if configured) to exclude specific known issues.
     - Document why the suppression is necessary.
+
+### Reviewer's Guide
+
+If you are assigned as a reviewer on a pull request where the EOL/Outdated JS Scan fails, your responsibility is to ensure the dependencies are updated or the vulnerabilities are addressed. Follow this checklist:
+
+1. If certain vulnerabilities are suppressed, ask the author to justify the suppression.
+
+2. If the dependencies are added by the author, ask them to update the dependencies to the latest stable version or find an alternative library if the dependency is EOL.
 
 ## Configuration
 
