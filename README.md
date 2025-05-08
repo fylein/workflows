@@ -31,13 +31,13 @@ If the JSCPD workflow fails, it means your code has exceeded the configured dupl
 1. Review the duplication report in the PR comments to identify duplicated code sections. Alternatively, you can run the command mentioned in the workflow [inputs](https://github.com/fylein/fyle-app/blob/master/.github/workflows/jscpd-duplication-check.yml) to check the duplicated files in your local system.
 
 2. Refactor the duplicated code by:
-- Creating reusable functions or components.
-- Implementing design patterns to reduce duplication.
-- Extracting common logic into shared utilities.
+    - Creating reusable functions or components.
+    - Implementing design patterns to reduce duplication.
+    - Extracting common logic into shared utilities.
 
 3. If the duplication is unavoidable or intentional:
-- Get approval from one of the designated reviewers (specified in the workflow inputs).
-- Once approved, re-run the workflow - it will pass if approved by an authorized reviewer.
+    - Get approval from one of the designated reviewers (specified in the workflow inputs).
+    - Once approved, re-run the workflow - it will pass if approved by an authorized reviewer.
 
 ### Edge Cases and Troubleshooting
 
@@ -48,8 +48,6 @@ If the JSCPD workflow fails, it means your code has exceeded the configured dupl
 
 2. **Third-Party Code**: If your project includes third-party libraries that contain duplication:
    - Exclude vendor directories from the scan.
-   - Document these exclusions in your project documentation.
-   - Consider using package managers instead of including third-party code directly.
 
 ## EOL/Outdated JS Scan
 
@@ -76,14 +74,14 @@ If the EOL/Outdated JS Scan fails, follow these steps:
 1. Review the scan report in the PR comments to identify problematic dependencies.
 
 2. For each flagged dependency:
-- Update to a newer, supported version if available.
-- Find an alternative library if the dependency is EOL.
-- Apply patches or workarounds for known vulnerabilities.
-- If a vulnerability cannot be addressed immediately, document it and create a plan to address it.
+    - Update to a newer, supported version if available.
+    - Find an alternative library if the dependency is EOL.
+    - Apply patches or workarounds for known vulnerabilities.
+    - If a vulnerability cannot be addressed immediately, document it and create a plan to address it.
 
 3. If certain vulnerabilities need to be temporarily suppressed:
-- Update the suppression.xml file (if configured) to exclude specific known issues.
-- Document why the suppression is necessary.
+    - Update the suppression.xml file (if configured) to exclude specific known issues.
+    - Document why the suppression is necessary.
 
 ## Configuration
 
