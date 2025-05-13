@@ -44,6 +44,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout master branch
+        run: |
+          git fetch origin master --depth 1
+          git checkout origin/master
+
+      - name: Run jscpd for ${{ inputs.tech_stack }} on master branch
+        run: |
+          ${{ inputs.command_to_run }}
+          cat report/jscpd-report.json
+
+      - name: Checkout back to PR branch
+        run: git checkout -
+
       - name: Run jscpd for ${{ inputs.tech_stack }}
         run: |
           ${{ inputs.command_to_run }}
@@ -61,6 +74,18 @@ jobs:
           script: |
             const fs = require('fs');
             const report = JSON.parse(fs.readFileSync('report/jscpd-report.json', 'utf8'));
+            const masterReport = JSON.parse(fs.readFileSync('report-master/jscpd-report.json', 'utf8'));
+
+            const formatDiff = (current, master) => {
+              const diff = (current - master).toFixed(2);
+              const absDiff = Math.abs(diff);
+              if (absDiff < 0.01) {
+                return `${current.toFixed(2)}%`;
+              }
+              const symbol = diff > 0 ? '❗' : diff < 0 ? '🚀' : '';
+              return `${current.toFixed(2)}% (${diff > 0 ? '+' : ''}${diff}% ${symbol})`;
+            };
+
             const summary = `
               ### 🔁 Code Duplication Report - ${{inputs.tech_stack}}
 
@@ -70,14 +95,31 @@ jobs:
 
             // Add rows for each format
             const formatRows = Object.entries(report.statistics.formats || {}).map(([format, stats]) => {
-              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} (${stats.total.percentage}%) | ${stats.total.duplicatedTokens} (${stats.total.percentageTokens}%) |`;
+              const masterStats = masterReport.statistics.formats[format] || { total: { percentage: 0, percentageTokens: 0 } };
+              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} (${formatDiff(stats.total.percentage, masterStats.total.percentage)}) | ${stats.total.duplicatedTokens} (${formatDiff(stats.total.percentageTokens, masterStats.total.percentageTokens)}) |`;
             }).join('\n');
 
             // Add total row
             const total = report.statistics.total;
-            const totalRow = `| **Total:** | ${total.sources} | ${total.lines} | ${total.tokens} | ${total.clones} | ${total.duplicatedLines} (${total.percentage}%) | ${total.duplicatedTokens} (${total.percentageTokens}%) |`;
+            const masterTotal = masterReport.statistics.total;
+            const totalRow = `| **Total:** | ${total.sources} | ${total.lines} | ${total.tokens} | ${total.clones} | ${total.duplicatedLines} (${formatDiff(total.percentage, masterTotal.percentage)}) | ${total.duplicatedTokens} (${formatDiff(total.percentageTokens, masterTotal.percentageTokens)}) |`;
 
-            const fullSummary = `${summary}${formatRows}\n${totalRow}`;
+            const fullSummary = `${summary}${formatRows}\n${totalRow}\n\n`;
+
+            // Add human-readable summary of changes
+            const tokenDiff = (total.percentageTokens - masterTotal.percentageTokens).toFixed(2);
+            const absTokenDiff = Math.abs(tokenDiff);
+            let changeSummary = '';
+
+            if (absTokenDiff < 0.01) {
+              changeSummary = '**📊 Overall Duplication Status:** No significant change in code duplication.';
+            } else if (tokenDiff > 0) {
+              changeSummary = `**⚠️ Overall Duplication Status:** This PR introduces **${absTokenDiff}%** more duplicated code.`;
+            } else {
+              changeSummary = `**🎉 Overall Duplication Status:** This PR reduces duplicated code by **${absTokenDiff}%**!`;
+            }
+
+            const fullSummaryWithStatus = `${fullSummary}${changeSummary}`;
 
             // Fetch existing comments
             const { data: comments } = await github.rest.issues.listComments({
@@ -102,7 +144,7 @@ jobs:
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
-              body: fullSummary
+              body: fullSummaryWithStatus
             });
 
       - name: Check PR approvals for bypass
