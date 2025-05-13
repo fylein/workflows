@@ -89,7 +89,7 @@ jobs:
             const botLogin = context.actor;
             for (const comment of comments) {
               if (
-                comment.user.login === botLogin &&
+                (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
                 comment.body.includes('### 🔁 Code Duplication Report')
               ) {
                 await github.rest.issues.deleteComment({
@@ -116,8 +116,6 @@ jobs:
               pull_number: context.issue.number
             });
 
-            console.log(reviews);
-
             const approved = reviews.some(review =>
               review.state === "APPROVED" &&
               (review.user.login === process.env.REVIEWER_1 || review.user.login === process.env.REVIEWER_2)
@@ -139,7 +137,7 @@ jobs:
             const botLogin = context.actor;
             for (const comment of comments) {
               if (
-                comment.user.login === botLogin &&
+                (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
                 comment.body.includes('Duplication threshold crosses beyond')
               ) {
                 await github.rest.issues.deleteComment({
