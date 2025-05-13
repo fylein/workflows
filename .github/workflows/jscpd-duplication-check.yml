@@ -90,7 +90,7 @@ jobs:
             for (const comment of comments) {
               if (
                 (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
-                comment.body.includes('### 🔁 Code Duplication Report')
+                comment.body.includes('### 🔁 Code Duplication Report - ${{inputs.tech_stack}}')
               ) {
                 await github.rest.issues.deleteComment({
                   ...context.repo,
