@@ -81,10 +81,10 @@ jobs:
               const diff = (current - master).toFixed(2);
               const absDiff = Math.abs(diff);
               if (absDiff < 0.01) {
-                return `${current.toFixed(2)}%`;
+                return `$({current.toFixed(2)}%)`;
               }
               const symbol = diff > 0 ? '❗' : diff < 0 ? '🚀' : '';
-              return `${current.toFixed(2)}% (${diff > 0 ? '+' : ''}${diff}% ${symbol})`;
+              return `$({current.toFixed(2)}%) ${diff > 0 ? '+' : ''}${diff}% ${symbol}`;
             };
 
             const summary = `
@@ -97,13 +97,13 @@ jobs:
             // Add rows for each format
             const formatRows = Object.entries(report.statistics.formats || {}).map(([format, stats]) => {
               const masterStats = masterReport.statistics.formats[format] || { total: { percentage: 0, percentageTokens: 0 } };
-              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} (${formatDiff(stats.total.percentage, masterStats.total.percentage)}) | ${stats.total.duplicatedTokens} (${formatDiff(stats.total.percentageTokens, masterStats.total.percentageTokens)}) |`;
+              return `| ${format} | ${stats.total.sources} | ${stats.total.lines} | ${stats.total.tokens} | ${stats.total.clones} | ${stats.total.duplicatedLines} ${formatDiff(stats.total.percentage, masterStats.total.percentage)} | ${stats.total.duplicatedTokens} ${formatDiff(stats.total.percentageTokens, masterStats.total.percentageTokens)} |`;
             }).join('\n');
 
             // Add total row
             const total = report.statistics.total;
             const masterTotal = masterReport.statistics.total;
-            const totalRow = `| **Total:** | ${total.sources} | ${total.lines} | ${total.tokens} | ${total.clones} | ${total.duplicatedLines} (${formatDiff(total.percentage, masterTotal.percentage)}) | ${total.duplicatedTokens} (${formatDiff(total.percentageTokens, masterTotal.percentageTokens)}) |`;
+            const totalRow = `| **Total:** | ${total.sources} | ${total.lines} | ${total.tokens} | ${total.clones} | ${total.duplicatedLines} ${formatDiff(total.percentage, masterTotal.percentage)} | ${total.duplicatedTokens} ${formatDiff(total.percentageTokens, masterTotal.percentageTokens)} |`;
 
             const fullSummary = `${summary}${formatRows}\n${totalRow}\n\n`;
 
@@ -113,11 +113,11 @@ jobs:
             let changeSummary = '';
 
             if (absTokenDiff < 0.01) {
-              changeSummary = '**📊 Overall Duplication Status:** No significant change in code duplication.';
+              changeSummary = '# 📊 No significant change in code duplication.';
             } else if (tokenDiff > 0) {
-              changeSummary = `**⚠️ Overall Duplication Status:** This PR introduces **${absTokenDiff}%** more duplicated code.`;
+              changeSummary = `# ⚠️ This PR introduces ${absTokenDiff}% more duplicated code.`;
             } else {
-              changeSummary = `**🎉 Overall Duplication Status:** This PR reduces duplicated code by **${absTokenDiff}%**!`;
+              changeSummary = `# 🎉 This PR reduces duplicated code by ${absTokenDiff}%!`;
             }
 
             const fullSummaryWithStatus = `${fullSummary}${changeSummary}`;
