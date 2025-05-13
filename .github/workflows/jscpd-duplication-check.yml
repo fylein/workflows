@@ -53,6 +53,7 @@ jobs:
         run: |
           ${{ inputs.command_to_run }}
           cat report/jscpd-report.json
+          mv report report-master
 
       - name: Checkout back to PR branch
         run: git checkout -
