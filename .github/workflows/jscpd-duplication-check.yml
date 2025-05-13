@@ -81,10 +81,10 @@ jobs:
               const diff = (current - master).toFixed(2);
               const absDiff = Math.abs(diff);
               if (absDiff < 0.01) {
-                return `$({current.toFixed(2)}%)`;
+                return `(${current.toFixed(2)}%)`;
               }
               const symbol = diff > 0 ? '❗' : diff < 0 ? '🚀' : '';
-              return `$({current.toFixed(2)}%) ${diff > 0 ? '+' : ''}${diff}% ${symbol}`;
+              return `(${current.toFixed(2)}%) ${diff > 0 ? '+' : ''}${diff}% ${symbol}`;
             };
 
             const summary = `
