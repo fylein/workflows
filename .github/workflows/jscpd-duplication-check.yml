@@ -79,6 +79,26 @@ jobs:
 
             const fullSummary = `${summary}${formatRows}\n${totalRow}`;
 
+            // Fetch existing comments
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number
+            });
+
+            // Delete old comments made by this bot with same header
+            const botLogin = context.actor;
+            for (const comment of comments) {
+              if (
+                (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
+                comment.body.includes('### 🔁 Code Duplication Report - ${{inputs.tech_stack}}')
+              ) {
+                await github.rest.issues.deleteComment({
+                  ...context.repo,
+                  comment_id: comment.id
+                });
+              }
+            }
+
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
@@ -90,28 +110,43 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { data } = await github.rest.pulls.listReviews({
+            const { data: reviews } = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-            return data;
 
-      - name: Determine reviewers approval status
-        id: reviewers
-        run: |
-          echo '${{ steps.approvals.outputs.result }}' > reviews.json
-          echo "Full reviews data:"
-          cat reviews.json
-          approved=$(jq -r "map(select(.state == \"APPROVED\" and (.user.login == env.REVIEWER_1 or .user.login == env.REVIEWER_2))) | length > 0" reviews.json)
-          echo "Approval check result: $approved"
-          echo "approved_by_reviewer=$approved" >> "$GITHUB_OUTPUT"
+            const approved = reviews.some(review =>
+              review.state === "APPROVED" &&
+              (review.user.login === process.env.REVIEWER_1 || review.user.login === process.env.REVIEWER_2)
+            );
+
+            core.setOutput("approved_by_reviewer", approved);
 
       - name: Comment if duplication > threshold and not approved
-        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.approvals.outputs.approved_by_reviewer == 'false'
         uses: actions/github-script@v7
         with:
           script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number
+            });
+
+            // Delete old comments made by this bot with same header
+            const botLogin = context.actor;
+            for (const comment of comments) {
+              if (
+                (comment.user.login === 'github-actions[bot]' || comment.user.type === 'Bot') &&
+                comment.body.includes('Duplication threshold crosses beyond')
+              ) {
+                await github.rest.issues.deleteComment({
+                  ...context.repo,
+                  comment_id: comment.id
+                });
+              }
+            }
+
             github.rest.issues.createComment({
               ...context.repo,
               issue_number: context.issue.number,
@@ -119,7 +154,7 @@ jobs:
             });
 
       - name: Fail if duplication > threshold and not approved
-        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.approvals.outputs.approved_by_reviewer == 'false'
         run: |
           echo "Duplication threshold crosses beyond ${DUPLICATION_THRESHOLD}%. Please check for potential code duplication. If it is critical, please take approvals from **${{inputs.reviewer_1}}** or **${{inputs.reviewer_2}}** for merging the pull request. Once approved, you can re-run the workflow."
           exit 1
