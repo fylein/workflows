@@ -126,7 +126,7 @@ jobs:
             core.setOutput("approved_by_reviewer", approved);
 
       - name: Comment if duplication > threshold and not approved
-        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.approvals.outputs.approved_by_reviewer == 'false'
         uses: actions/github-script@v7
         with:
           script: |
@@ -156,7 +156,7 @@ jobs:
             });
 
       - name: Fail if duplication > threshold and not approved
-        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.reviewers.outputs.approved_by_reviewer == 'false'
+        if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.approvals.outputs.approved_by_reviewer == 'false'
         run: |
           echo "Duplication threshold crosses beyond ${DUPLICATION_THRESHOLD}%. Please check for potential code duplication. If it is critical, please take approvals from **${{inputs.reviewer_1}}** or **${{inputs.reviewer_2}}** for merging the pull request. Once approved, you can re-run the workflow."
           exit 1
