@@ -116,6 +116,8 @@ jobs:
               pull_number: context.issue.number
             });
 
+            console.log(reviews);
+
             const approved = reviews.some(review =>
               review.state === "APPROVED" &&
               (review.user.login === process.env.REVIEWER_1 || review.user.login === process.env.REVIEWER_2)
@@ -138,7 +140,7 @@ jobs:
             for (const comment of comments) {
               if (
                 comment.user.login === botLogin &&
-                comment.body.includes('### 🔁 Code Duplication Report')
+                comment.body.includes('Duplication threshold crosses beyond')
               ) {
                 await github.rest.issues.deleteComment({
                   ...context.repo,
