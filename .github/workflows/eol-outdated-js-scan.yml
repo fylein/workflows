@@ -66,7 +66,9 @@ jobs:
 
       - name: Install dependencies
         if: steps.node-cache.outputs.cache-hit != 'true'
-        run: ${{ inputs.npm-run-cmd }}
+        env:
+          NPM_RUN_CMD: ${{ inputs.npm-run-cmd }}
+        run: "$NPM_RUN_CMD"
 
       - name: Run EOL/Outdated JS Scan
         uses: fylein/eol-outdated-js-scan-action@master
