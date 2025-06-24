@@ -56,7 +56,6 @@ jobs:
           TECH_STACK: ${{ inputs.tech_stack }}
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
-          ${{ inputs.command_to_run }}
           $COMMAND_TO_RUN
           cat report/jscpd-report.json
           mv report report-master
@@ -68,7 +67,6 @@ jobs:
         env:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
-          ${{ inputs.command_to_run }}
           $COMMAND_TO_RUN
           cat report/jscpd-report.json
 
