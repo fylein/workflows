@@ -56,7 +56,7 @@ jobs:
           TECH_STACK: ${{ inputs.tech_stack }}
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
-          "$COMMAND_TO_RUN"
+          $COMMAND_TO_RUN
           cat report/jscpd-report.json
           mv report report-master
 
@@ -67,7 +67,7 @@ jobs:
         env:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
-          "$COMMAND_TO_RUN"
+          $COMMAND_TO_RUN
           cat report/jscpd-report.json
 
       - name: Extract duplication percentage - ${{ inputs.tech_stack }}
