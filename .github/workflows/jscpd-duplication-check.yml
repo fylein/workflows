@@ -57,7 +57,7 @@ jobs:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
           ${{ inputs.command_to_run }}
-          cat $COMMAND_TO_RUN
+          $COMMAND_TO_RUN
           cat report/jscpd-report.json
           mv report report-master
 
@@ -69,7 +69,7 @@ jobs:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
           ${{ inputs.command_to_run }}
-          cat $COMMAND_TO_RUN
+          $COMMAND_TO_RUN
           cat report/jscpd-report.json
 
       - name: Extract duplication percentage - ${{ inputs.tech_stack }}
