@@ -62,7 +62,7 @@ jobs:
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report-master/jscpd-report.json)"
 
       - name: Checkout back to PR branch
-        run: git checkout ${{ github.head_ref }}
+        run: git checkout -
 
       - name: Run jscpd for ${{ inputs.tech_stack }}
         env:
