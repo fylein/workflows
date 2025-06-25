@@ -49,7 +49,7 @@ jobs:
       - name: Checkout master branch
         run: |
           git fetch origin master --depth 1
-          git checkout origin/master  --no-overlay
+          git checkout origin/master
 
       - name: Run jscpd for ${{ inputs.tech_stack }} on master branch
         env:
@@ -62,7 +62,7 @@ jobs:
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report-master/jscpd-report.json)"
 
       - name: Checkout back to PR branch
-        run: git checkout ${{ github.head_ref }} --no-overlay
+        run: git checkout ${{ github.head_ref }}
 
       - name: Run jscpd for ${{ inputs.tech_stack }}
         env:
