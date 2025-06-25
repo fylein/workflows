@@ -57,8 +57,8 @@ jobs:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
           echo "ls: $(ls -la)"
-          echo "command to run: $COMMAND_TO_RUN"
-          ${{ inputs.command_to_run }}
+          echo "********** command to run: $COMMAND_TO_RUN"
+          $COMMAND_TO_RUN
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report/jscpd-report.json)"
           mv report report-master
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report-master/jscpd-report.json)"
@@ -71,7 +71,7 @@ jobs:
         env:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
-          ${{ inputs.command_to_run }}
+          $COMMAND_TO_RUN
           echo "jscpd version: $(npx jscpd --version)"
           echo "pr duplication percentage: $(jq .statistics.total.percentageTokens report/jscpd-report.json)"
 
