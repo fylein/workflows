@@ -61,6 +61,7 @@ jobs:
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report/jscpd-report.json)"
           mv report report-master
           echo "master duplication percentage: $(jq .statistics.total.percentageTokens report-master/jscpd-report.json)"
+          cat report-master/jscpd-report.json
 
       - name: Checkout back to PR branch
         run: git checkout -
