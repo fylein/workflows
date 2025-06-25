@@ -57,9 +57,9 @@ jobs:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
           $COMMAND_TO_RUN
-          echo "$(jq .statistics.total.percentageTokens report/jscpd-report.json)"
+          echo "master duplication percentage: $(jq .statistics.total.percentageTokens report/jscpd-report.json)"
           mv report report-master
-          echo "$(jq .statistics.total.percentageTokens report/jscpd-report.json)"
+          echo "master duplication percentage: $(jq .statistics.total.percentageTokens report-master/jscpd-report.json)"
 
       - name: Checkout back to PR branch
         run: git checkout -
@@ -69,7 +69,7 @@ jobs:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
         run: |
           $COMMAND_TO_RUN
-          echo "$(jq .statistics.total.percentageTokens report/jscpd-report.json)"
+          echo "pr duplication percentage: $(jq .statistics.total.percentageTokens report/jscpd-report.json)"
 
       - name: Extract duplication percentage - ${{ inputs.tech_stack }}
         id: duplication
