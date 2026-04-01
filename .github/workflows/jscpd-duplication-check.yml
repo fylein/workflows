@@ -23,6 +23,16 @@ on:
         description: 'Command to run JSCPD'
         required: true
         type: string
+      node_version:
+        description: 'Node.js version for running JSCPD (e.g. 20.17.0)'
+        required: false
+        type: string
+        default: '20.17.0'
+      package_manager:
+        description: 'Package manager for dependency install and cache (npm and pnpm both cache node_modules)'
+        required: false
+        type: string
+        default: 'npm'
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -46,6 +56,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Setup pnpm
+        if: inputs.package_manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+
       - name: Checkout master branch
         run: |
           git fetch origin master --depth 1
@@ -55,8 +73,9 @@ jobs:
         env:
           TECH_STACK: ${{ inputs.tech_stack }}
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
+        shell: bash
         run: |
-          $COMMAND_TO_RUN
+          bash -lc "$COMMAND_TO_RUN"
           cat report/jscpd-report.json
           mv report report-master
 
@@ -66,8 +85,9 @@ jobs:
       - name: Run jscpd for ${{ inputs.tech_stack }}
         env:
           COMMAND_TO_RUN: ${{ inputs.command_to_run }}
+        shell: bash
         run: |
-          $COMMAND_TO_RUN
+          bash -lc "$COMMAND_TO_RUN"
           cat report/jscpd-report.json
 
       - name: Extract duplication percentage - ${{ inputs.tech_stack }}
