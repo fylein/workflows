@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: '20.17.0'
+      package_manager:
+        description: 'Package manager for dependency install and cache (npm and pnpm both cache node_modules)'
+        required: false
+        type: string
+        default: 'npm'
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -41,6 +46,8 @@ jobs:
             dependencies:
               - 'package-lock.json'
               - 'app-v2/package-lock.json'
+              - 'pnpm-lock.yaml'
+              - '**/pnpm-lock.yaml'
               - '**/bower_components/**'
               - 'suppression.xml'
 
@@ -60,8 +67,13 @@ jobs:
         with:
           node-version: ${{ inputs.node_version }}
 
-      - name: Cache node_modules
+      - name: Setup pnpm
+        if: inputs.package_manager == 'pnpm'
+        uses: pnpm/action-setup@v4
+
+      - name: Cache node_modules (npm)
         id: node-cache
+        if: inputs.package_manager == 'npm'
         uses: actions/cache@v4
         with:
           path: node_modules
@@ -69,12 +81,30 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Install dependencies
-        if: steps.node-cache.outputs.cache-hit != 'true'
+      - name: Cache pnpm node_modules
+        id: pnpm-cache
+        if: inputs.package_manager == 'pnpm'
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies (npm)
+        if: inputs.package_manager == 'npm' && steps.node-cache.outputs.cache-hit != 'true'
         env:
           NPM_RUN_CMD: ${{ inputs.npm-run-cmd }}
         shell: bash
-        run: | 
+        run: |
+          bash -lc "$NPM_RUN_CMD"
+
+      - name: Install dependencies (pnpm)
+        if: inputs.package_manager == 'pnpm' && steps.pnpm-cache.outputs.cache-hit != 'true'
+        env:
+          NPM_RUN_CMD: ${{ inputs.npm-run-cmd }}
+        shell: bash
+        run: |
           bash -lc "$NPM_RUN_CMD"
 
       - name: Run EOL/Outdated JS Scan
