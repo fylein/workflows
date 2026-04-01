@@ -11,6 +11,11 @@ on:
         description: 'NPM command to run'
         required: true
         type: string
+      node:
+        description: 'Node.js version for install and scan'
+        required: false
+        type: string
+        default: '20.17.0'
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -53,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.17.0
+          node-version: ${{ inputs.node }}
 
       - name: Cache node_modules
         id: node-cache

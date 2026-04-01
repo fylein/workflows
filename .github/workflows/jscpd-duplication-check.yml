@@ -23,6 +23,11 @@ on:
         description: 'Command to run JSCPD'
         required: true
         type: string
+      node:
+        description: 'Node.js version for running JSCPD (e.g. 20.17.0)'
+        required: true
+        type: string
+        default: '20.17.0'
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -45,6 +50,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node }}
 
       - name: Checkout master branch
         run: |
