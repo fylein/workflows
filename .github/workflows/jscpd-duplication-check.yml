@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: '20.17.0'
+      package_manager:
+        description: 'Package manager for dependency install and cache (npm and pnpm both cache node_modules)'
+        required: false
+        type: string
+        default: 'npm'
     secrets:
       github-token:
         description: 'GitHub token for creating/updating comments'
@@ -54,6 +59,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node_version }}
+
+      - name: Setup pnpm
+        if: inputs.package_manager == 'pnpm'
+        uses: pnpm/action-setup@v4
 
       - name: Checkout master branch
         run: |
