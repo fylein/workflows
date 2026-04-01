@@ -11,7 +11,7 @@ on:
         description: 'NPM command to run'
         required: true
         type: string
-      node:
+      node_version:
         description: 'Node.js version for install and scan'
         required: false
         type: string
@@ -58,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node }}
+          node-version: ${{ inputs.node_version }}
 
       - name: Cache node_modules
         id: node-cache

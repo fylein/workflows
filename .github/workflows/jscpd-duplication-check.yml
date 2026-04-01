@@ -23,9 +23,9 @@ on:
         description: 'Command to run JSCPD'
         required: true
         type: string
-      node:
+      node_version:
         description: 'Node.js version for running JSCPD (e.g. 20.17.0)'
-        required: true
+        required: false
         type: string
         default: '20.17.0'
     secrets:
@@ -53,7 +53,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node }}
+          node-version: ${{ inputs.node_version }}
 
       - name: Checkout master branch
         run: |
