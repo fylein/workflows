@@ -70,9 +70,6 @@ jobs:
           cat report/jscpd-report.json
           mv report report-master
 
-      - name: Git diff
-        run: git diff
-
       - name: Checkout back to PR branch
         run: git checkout -
 
