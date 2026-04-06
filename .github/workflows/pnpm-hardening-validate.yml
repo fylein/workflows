@@ -102,6 +102,12 @@ jobs:
                                   "pnpm-workspace.yaml: trustPolicy must be "
                                   f"{EXPECTED_TRUST_POLICY!r} (found {data['trustPolicy']!r})."
                               )
+                      for bool_key in ("blockExoticSubdeps", "strictDepBuilds"):
+                          if bool_key in data and data[bool_key] is not True:
+                              errors.append(
+                                  f"pnpm-workspace.yaml: {bool_key} must be YAML boolean true "
+                                  f"(found {data[bool_key]!r})."
+                              )
 
           for msg in errors:
               print(f"::error title=pnpm hardening::{msg}")
