@@ -35,7 +35,10 @@ jobs:
           )
           FORBIDDEN_TOP_LEVEL_KEY = "minimumReleaseAgeExclude"
           MIN_MINIMUM_RELEASE_AGE = 1440
+          # Unquoted no-downgrade is valid YAML (same as pnpm.io/settings#trustpolicy); it is a
+          # string, not coerced like plain `off` (which PyYAML parses as boolean false).
           EXPECTED_TRUST_POLICY = "no-downgrade"
+          EXPECTED_VERIFY_DEPS_BEFORE_RUN = "error"
 
           root = os.environ.get("GITHUB_WORKSPACE", ".")
           lock_path = os.path.join(root, "pnpm-lock.yaml")
@@ -96,6 +99,13 @@ jobs:
                                           "pnpm-workspace.yaml: minimumReleaseAge must be at least "
                                           f"{MIN_MINIMUM_RELEASE_AGE} minutes (found {mra!r})."
                                       )
+                      if "verifyDepsBeforeRun" in data:
+                          if data["verifyDepsBeforeRun"] != EXPECTED_VERIFY_DEPS_BEFORE_RUN:
+                              errors.append(
+                                  "pnpm-workspace.yaml: verifyDepsBeforeRun must be "
+                                  f"{EXPECTED_VERIFY_DEPS_BEFORE_RUN!r} "
+                                  f"(found {data['verifyDepsBeforeRun']!r})."
+                              )
                       if "trustPolicy" in data:
                           if data["trustPolicy"] != EXPECTED_TRUST_POLICY:
                               errors.append(
