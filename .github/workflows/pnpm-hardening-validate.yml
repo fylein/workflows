@@ -11,7 +11,7 @@ jobs:
     name: Require pnpm lockfile and workspace file
     runs-on: ubuntu-latest
     outputs:
-      pnpm_workspace_changed: ${{ steps.workspace_filter.outputs.pnpm_workspace }}
+      pnpm_workspace_changed: ${{ steps.workspace_files.outputs.any_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,12 +19,11 @@ jobs:
           fetch-depth: 0
 
       - name: Detect pnpm-workspace.yaml changes
-        id: workspace_filter
-        uses: dorny/paths-filter@v3
+        id: workspace_files
+        uses: tj-actions/changed-files@v47.0.5
         with:
-          filters: |
-            pnpm_workspace:
-              - 'pnpm-workspace.yaml'
+          files: |
+            pnpm-workspace.yaml
 
       - name: Require pnpm-lock.yaml and pnpm-workspace.yaml at repo root
         shell: bash
