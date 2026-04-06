@@ -1,0 +1,107 @@
+name: Validate pnpm hardening
+
+on:
+  workflow_call: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: pnpm hardening requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate pnpm lockfile and workspace policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check -q pyyaml
+          python3 << 'PY'
+          import os
+          import sys
+
+          import yaml
+
+          REQUIRED_TOP_LEVEL_KEYS = (
+              "minimumReleaseAge",
+              "verifyDepsBeforeRun",
+              "trustPolicy",
+              "blockExoticSubdeps",
+              "strictDepBuilds",
+              "allowBuilds",
+          )
+          FORBIDDEN_TOP_LEVEL_KEY = "minimumReleaseAgeExclude"
+          MIN_MINIMUM_RELEASE_AGE = 1440
+
+          root = os.environ.get("GITHUB_WORKSPACE", ".")
+          lock_path = os.path.join(root, "pnpm-lock.yaml")
+          workspace_path = os.path.join(root, "pnpm-workspace.yaml")
+
+          errors: list[str] = []
+
+          if not os.path.isfile(lock_path):
+              errors.append(
+                  "Missing pnpm-lock.yaml at the repository root (expected next to package.json)."
+              )
+
+          if not os.path.isfile(workspace_path):
+              errors.append(
+                  "Missing pnpm-workspace.yaml at the repository root."
+              )
+          else:
+              try:
+                  with open(workspace_path, encoding="utf-8") as f:
+                      parsed = yaml.safe_load(f)
+              except yaml.YAMLError as e:
+                  errors.append(f"pnpm-workspace.yaml is not valid YAML: {e}")
+              else:
+                  data = {} if parsed is None else parsed
+                  if not isinstance(data, dict):
+                      errors.append(
+                          "pnpm-workspace.yaml must be a YAML mapping (object) at the top level."
+                      )
+                  else:
+                      for key in REQUIRED_TOP_LEVEL_KEYS:
+                          if key not in data:
+                              errors.append(
+                                  f"pnpm-workspace.yaml: missing required top-level key '{key}'."
+                              )
+                      if FORBIDDEN_TOP_LEVEL_KEY in data:
+                          errors.append(
+                              "pnpm-workspace.yaml: forbidden top-level key "
+                              f"'{FORBIDDEN_TOP_LEVEL_KEY}' must not be present."
+                          )
+                      if "minimumReleaseAge" in data:
+                          mra = data["minimumReleaseAge"]
+                          if mra is None or isinstance(mra, bool):
+                              errors.append(
+                                  "pnpm-workspace.yaml: minimumReleaseAge must be a numeric "
+                                  f"value (minutes) and at least {MIN_MINIMUM_RELEASE_AGE}."
+                              )
+                          else:
+                              try:
+                                  n = float(mra)
+                              except (TypeError, ValueError):
+                                  errors.append(
+                                      "pnpm-workspace.yaml: minimumReleaseAge must be a numeric "
+                                      f"value (minutes) and at least {MIN_MINIMUM_RELEASE_AGE}."
+                                  )
+                              else:
+                                  if n < MIN_MINIMUM_RELEASE_AGE:
+                                      errors.append(
+                                          "pnpm-workspace.yaml: minimumReleaseAge must be at least "
+                                          f"{MIN_MINIMUM_RELEASE_AGE} minutes (found {mra!r})."
+                                      )
+
+          for msg in errors:
+              print(f"::error title=pnpm hardening::{msg}")
+
+          if errors:
+              print(f"\nValidation failed with {len(errors)} error(s).", file=sys.stderr)
+              sys.exit(1)
+
+          print("pnpm hardening validation passed.")
+          PY
