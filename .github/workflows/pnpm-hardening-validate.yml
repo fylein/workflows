@@ -57,7 +57,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m pip install --disable-pip-version-check -q pyyaml
+          python3 -m pip install --disable-pip-version-check -q 'PyYAML==6.0.2'
           python3 << 'PY'
           import os
           import sys
