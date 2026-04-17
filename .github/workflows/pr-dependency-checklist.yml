@@ -14,7 +14,7 @@
 # No workflow_call inputs: hub is `${{ github.repository_owner }}/workflows` (same GitHub org as
 # the caller). Hub ref is parsed from github.workflow_ref (callee path@ref from uses: …@ref).
 # Do not use github.action_ref here: for actions/checkout@v4 it is the action tag "v4", not the
-# reusable workflow pin. Relative uses: ./.github/... falls back to main for the hub checkout.
+# reusable workflow pin. Relative uses: ./.github/... falls back to DEFAULT_HUB_REF for the hub checkout.
 
 name: PR dependency checklist
 
@@ -73,16 +73,19 @@ jobs:
         env:
           WORKFLOW_REF: ${{ github.workflow_ref }}
           HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
+          # Match the default branch of the `{owner}/workflows` hub repository.
+          DEFAULT_HUB_REF: master
         run: |
           set -euo pipefail
           wf="${WORKFLOW_REF}"
           prefix="${HUB_REPO_PREFIX}"
+          def="${DEFAULT_HUB_REF}"
           ref="${wf##*@}"
-          if [ -z "${ref}" ] || [ "${ref}" = "${wf}" ]; then ref=main; fi
-          case "${ref}" in refs/pull/*) ref=main ;; esac
+          if [ -z "${ref}" ] || [ "${ref}" = "${wf}" ]; then ref="${def}"; fi
+          case "${ref}" in refs/pull/*) ref="${def}" ;; esac
           case "${wf}" in
             "${prefix}"*) ;;
-            *) ref=main ;;
+            *) ref="${def}" ;;
           esac
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
           echo "Checklist hub clone ref: ${ref} (workflow_ref=${wf})"
