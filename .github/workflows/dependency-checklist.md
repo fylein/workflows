@@ -1,6 +1,6 @@
 <!--
-  Checklist template for pr-dependency-checklist.yml (reusable workflow). Lives only in this repo;
-  injected sections are bounded by the fyle:dependency-checklist markers below.
+  Checklist template for pr-dependency-checklist.yml. Lives in the org workflows repo
+  (`{repository_owner}/workflows`); the reusable workflow checks out that repo for this file.
 -->
 <!-- fyle:dependency-checklist -->
 ## Dependency / pnpm review checklist

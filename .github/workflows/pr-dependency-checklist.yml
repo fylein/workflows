@@ -9,9 +9,10 @@
 # Removes the whole checklist when none of those files change (only while the validate job runs,
 # i.e. when package.json, pnpm-lock.yaml, or pnpm-workspace.yaml changed on this sync).
 #
-# Checklist template: `.github/workflows/dependency-checklist.md` lives in this same hub repo as this
-# workflow file. The runner still checks out the application repo first, so we clone the hub again.
-# Hub coordinates: parse github.workflow_ref (path to THIS workflow @ ref), else github.action_*.
+# Checklist template: `.github/workflows/dependency-checklist.md` lives in this hub repo (with this
+# workflow). The runner checks out the application repo first, then clones the hub again.
+# No workflow_call inputs: hub is `${{ github.repository_owner }}/workflows` (same GitHub org as
+# the caller). Ref is github.action_ref from uses: …@ref, else main. Same-org reusable calls only.
 
 name: PR dependency checklist
 
@@ -50,8 +51,10 @@ jobs:
               - '**/package.json'
             lockfile:
               - pnpm-lock.yaml
+              - pnpm-lock.yml
             workspace:
               - pnpm-workspace.yaml
+              - pnpm-workspace.yml
 
   validate:
     name: Update and validate PR checklist
@@ -59,46 +62,15 @@ jobs:
     if: needs.relevant-files.outputs.any_relevant == 'false'
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve workflows hub for checklist template
-        id: hub
-        shell: bash
-        run: |
-          set -euo pipefail
-          wf_ref="${{ github.workflow_ref }}"
-          repo=""
-          ref=""
-          # e.g. org/workflows/.github/workflows/pr-dependency-checklist.yml@refs/heads/main
-          if [[ -n "${wf_ref}" && "${wf_ref}" == *"/.github/workflows/"* && "${wf_ref}" == *"@"* ]]; then
-            path_part="${wf_ref%@*}"
-            ref="${wf_ref#*@}"
-            repo="${path_part%%/.github/*}"
-          fi
-          if [[ -z "${repo}" ]]; then
-            repo="${{ github.action_repository }}"
-          fi
-          if [[ -z "${ref}" ]]; then
-            ref="${{ github.action_ref }}"
-          fi
-          if [[ -z "${ref}" ]]; then
-            ref="main"
-          fi
-          if [[ -z "${repo}" ]]; then
-            echo "::error title=Checklist hub::Could not resolve the hub repo for dependency-checklist.md. github.workflow_ref was '${wf_ref:-}' and github.action_repository was empty. Upgrade GitHub Actions / confirm reusable workflow_ref is set for this run." >&2
-            exit 1
-          fi
-          echo "Checklist template checkout: ${repo} @ ${ref}"
-          echo "repository=${repo}" >> "${GITHUB_OUTPUT}"
-          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Checkout checklist template (workflows hub)
+      - name: Checkout checklist template (same-org workflows hub)
         uses: actions/checkout@v4
         with:
-          repository: ${{ steps.hub.outputs.repository }}
-          ref: ${{ steps.hub.outputs.ref }}
+          repository: ${{ format('{0}/workflows', github.repository_owner) }}
+          ref: ${{ github.action_ref || 'main' }}
           path: .github-dependency-checklist-template
           fetch-depth: 1
 
@@ -204,9 +176,9 @@ jobs:
 
       - name: Dependency checklist (inject, validate, or remove stale)
         env:
-          CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
-          CHECKLIST_HUB_REPOSITORY: ${{ steps.hub.outputs.repository }}
-          CHECKLIST_HUB_REF: ${{ steps.hub.outputs.ref }}
+          CHECKLIST_TEMPLATE_PATH: fylein/workflows/.github/workflows/dependency-checklist.md
+          CHECKLIST_HUB_REPOSITORY: ${{ format('{0}/workflows', github.repository_owner) }}
+          CHECKLIST_HUB_REF: ${{ github.action_ref || 'main' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PACKAGE_JSON_CHANGED: ${{ steps.dependency_files.outputs.package_json_any_changed }}
           LOCKFILE_CHANGED: ${{ steps.dependency_files.outputs.lockfile_any_changed }}
