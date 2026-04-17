@@ -6,8 +6,8 @@
 # Injects only the checklist blocks that match the change type (deps vs scripts vs other package.json edits).
 # Required checklist items use <!-- required:... --> tags for validation.
 # Prunes inner sections when file paths or classified change types no longer apply.
-# Removes the whole checklist when none of those files change (only while the validate job runs,
-# i.e. when package.json, pnpm-lock.yaml, or pnpm-workspace.yaml changed on this sync).
+# Removes stale checklist when none of those files change on this sync (strip path).
+# The validate job runs for every non-draft PR (after relevant-files); inject runs when those paths change.
 #
 # Checklist template: `.github/workflows/dependency-checklist.md` lives in this hub repo (with this
 # workflow). The runner checks out the application repo first, then clones the hub again.
@@ -35,8 +35,6 @@ jobs:
     name: Relevant dependency paths changed
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    outputs:
-      any_relevant: ${{ steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,15 +59,31 @@ jobs:
   validate:
     name: Update and validate PR checklist
     needs: relevant-files
-    if: needs.relevant-files.outputs.any_relevant == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Detect dependency-related file changes
+        id: dependency_files
+        uses: tj-actions/changed-files@v46
+        with:
+          separator: "\n"
+          files_yaml: |
+            package_json:
+              - package.json
+              - '**/package.json'
+            lockfile:
+              - pnpm-lock.yaml
+              - pnpm-lock.yml
+            workspace:
+              - pnpm-workspace.yaml
+              - pnpm-workspace.yml
+
       - id: checklist_hub_ref
         name: Resolve workflows hub ref (callee pin, not actions/checkout action_ref)
+        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
         env:
           WORKFLOW_REF: ${{ github.workflow_ref }}
           HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
@@ -91,28 +105,13 @@ jobs:
           echo "Checklist hub clone ref: ${ref} (workflow_ref=${wf})"
 
       - name: Checkout checklist template (same-org workflows hub)
+        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ format('{0}/workflows', github.repository_owner) }}
           ref: ${{ steps.checklist_hub_ref.outputs.ref }}
           path: .github-dependency-checklist-template
           fetch-depth: 1
-
-      - name: Detect dependency-related file changes
-        id: dependency_files
-        uses: tj-actions/changed-files@v46
-        with:
-          separator: "\n"
-          files_yaml: |
-            package_json:
-              - package.json
-              - '**/package.json'
-            lockfile:
-              - pnpm-lock.yaml
-              - pnpm-lock.yml
-            workspace:
-              - pnpm-workspace.yaml
-              - pnpm-workspace.yml
 
       - name: Classify package.json changes
         id: classify
@@ -783,16 +782,15 @@ jobs:
           manifest_lock_changed = env_bool("PACKAGE_JSON_CHANGED") or env_bool("LOCKFILE_CHANGED")
           workspace_changed = env_bool("WORKSPACE_CHANGED")
 
-          snippet_path = Path(os.environ["CHECKLIST_TEMPLATE_PATH"])
-          if not snippet_path.exists():
-              fail(
-                  "Missing dependency checklist template",
-                  f"The checklist template file does not exist at {snippet_path} "
-                  f"(expected {SNIPPET_DOC}).",
-              )
-          snippet = snippet_path.read_text(encoding="utf-8").strip()
-
           if manifest_lock_changed or workspace_changed:
+              snippet_path = Path(os.environ["CHECKLIST_TEMPLATE_PATH"])
+              if not snippet_path.exists():
+                  fail(
+                      "Missing dependency checklist template",
+                      f"The checklist template file does not exist at {snippet_path} "
+                      f"(expected {SNIPPET_DOC}).",
+                  )
+              snippet = snippet_path.read_text(encoding="utf-8").strip()
               run_inject_and_validate(pr_number, snippet, manifest_lock_changed, workspace_changed)
           else:
               run_strip_stale(pr_number)
