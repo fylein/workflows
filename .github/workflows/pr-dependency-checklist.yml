@@ -12,7 +12,9 @@
 # Checklist template: `.github/workflows/dependency-checklist.md` lives in this hub repo (with this
 # workflow). The runner checks out the application repo first, then clones the hub again.
 # No workflow_call inputs: hub is `${{ github.repository_owner }}/workflows` (same GitHub org as
-# the caller). Ref is github.action_ref from uses: …@ref, else main. Same-org reusable calls only.
+# the caller). Hub ref is parsed from github.workflow_ref (callee path@ref from uses: …@ref).
+# Do not use github.action_ref here: for actions/checkout@v4 it is the action tag "v4", not the
+# reusable workflow pin. Relative uses: ./.github/... falls back to main for the hub checkout.
 
 name: PR dependency checklist
 
@@ -66,11 +68,30 @@ jobs:
         with:
           fetch-depth: 0
 
+      - id: checklist_hub_ref
+        name: Resolve workflows hub ref (callee pin, not actions/checkout action_ref)
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
+        run: |
+          set -euo pipefail
+          wf="${WORKFLOW_REF}"
+          prefix="${HUB_REPO_PREFIX}"
+          ref="${wf##*@}"
+          if [ -z "${ref}" ] || [ "${ref}" = "${wf}" ]; then ref=main; fi
+          case "${ref}" in refs/pull/*) ref=main ;; esac
+          case "${wf}" in
+            "${prefix}"*) ;;
+            *) ref=main ;;
+          esac
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "Checklist hub clone ref: ${ref} (workflow_ref=${wf})"
+
       - name: Checkout checklist template (same-org workflows hub)
         uses: actions/checkout@v4
         with:
           repository: ${{ format('{0}/workflows', github.repository_owner) }}
-          ref: ${{ github.action_ref || 'main' }}
+          ref: ${{ steps.checklist_hub_ref.outputs.ref }}
           path: .github-dependency-checklist-template
           fetch-depth: 1
 
@@ -178,7 +199,7 @@ jobs:
         env:
           CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
           CHECKLIST_HUB_REPOSITORY: ${{ format('{0}/workflows', github.repository_owner) }}
-          CHECKLIST_HUB_REF: ${{ github.action_ref || 'main' }}
+          CHECKLIST_HUB_REF: ${{ steps.checklist_hub_ref.outputs.ref }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PACKAGE_JSON_CHANGED: ${{ steps.dependency_files.outputs.package_json_any_changed }}
           LOCKFILE_CHANGED: ${{ steps.dependency_files.outputs.lockfile_any_changed }}
