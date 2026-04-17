@@ -8,7 +8,6 @@
 # Prunes inner sections when file paths or classified change types no longer apply.
 # Removes the whole checklist when none of those files change.
 #
-# Caller must keep .github/dependency-checklist.md in the consuming repository. See examples/pr-dependency-checklist-caller.yml.
 
 name: PR dependency checklist
 
@@ -18,10 +17,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-
-concurrency:
-  group: pr-dependency-checklist-${{ github.workflow }}-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
 
 jobs:
   validate:
