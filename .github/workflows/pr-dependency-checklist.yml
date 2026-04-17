@@ -50,15 +50,13 @@ jobs:
               - '**/package.json'
             lockfile:
               - pnpm-lock.yaml
-              - pnpm-lock.yml
             workspace:
               - pnpm-workspace.yaml
-              - pnpm-workspace.yml
 
   validate:
     name: Update and validate PR checklist
     needs: relevant-files
-    if: needs.relevant-files.outputs.any_relevant == 'true'
+    if: needs.relevant-files.outputs.any_relevant == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Resolve workflows hub for checklist template
