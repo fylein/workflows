@@ -21,7 +21,7 @@ name: PR dependency checklist
 on:
   workflow_call: {}
 
-# contents:read — checkout caller repo + template repo. pull-requests:write — gh pr view/edit on the caller PR.
+# contents:read — checkout caller repo + template repo. pull-requests:write — gh pr view/edit on the caller PR (GH_TOKEN).
 permissions:
   contents: read
   pull-requests: write
@@ -199,6 +199,7 @@ jobs:
 
       - name: Dependency checklist (inject, validate, or remove stale)
         env:
+          GH_TOKEN: ${{ github.token }}
           CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
           CHECKLIST_HUB_REPOSITORY: ${{ format('{0}/workflows', github.repository_owner) }}
           CHECKLIST_HUB_REF: ${{ steps.checklist_hub_ref.outputs.ref }}
