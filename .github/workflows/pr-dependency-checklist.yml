@@ -8,15 +8,23 @@
 # Prunes inner sections when file paths or classified change types no longer apply.
 # Removes the whole checklist when none of those files change.
 #
+# Checklist markdown template: `.github/workflows/dependency-checklist.md` in THIS repository
+# (loaded via a second checkout using github.action_repository / github.action_ref). Callers do not
+# need to copy that file.
 
 name: PR dependency checklist
 
 on:
   workflow_call: {}
 
+# contents:read — checkout caller repo + template repo. pull-requests:write — gh pr view/edit on the caller PR.
 permissions:
   contents: read
   pull-requests: write
+
+concurrency:
+  group: pr-dependency-checklist-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -26,6 +34,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Checkout checklist template (reusable workflows repository)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.action_repository }}
+          ref: ${{ github.action_ref }}
+          path: .github-dependency-checklist-template
+          fetch-depth: 1
 
       - name: Detect dependency-related file changes
         id: dependency_files
@@ -127,6 +143,7 @@ jobs:
 
       - name: Dependency checklist (inject, validate, or remove stale)
         env:
+          CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PACKAGE_JSON_CHANGED: ${{ steps.dependency_files.outputs.package_json_any_changed }}
           LOCKFILE_CHANGED: ${{ steps.dependency_files.outputs.lockfile_any_changed }}
@@ -142,6 +159,10 @@ jobs:
           import subprocess
           import sys
           from pathlib import Path
+
+          SNIPPET_DOC = (
+              "`.github/workflows/dependency-checklist.md` in the reusable workflows repository"
+          )
 
           OUTER_START = "<!-- fyle:dependency-checklist -->"
           OUTER_END = "<!-- /fyle:dependency-checklist -->"
@@ -288,7 +309,7 @@ jobs:
                   if not b.strip():
                       fail(
                           "Missing dependencies checklist template",
-                          "Could not read the packages-deps block from '.github/dependency-checklist.md'.",
+                          f"Could not read the packages-deps block from {SNIPPET_DOC}.",
                       )
                   blocks.append(b.strip())
               if need_manifest:
@@ -296,7 +317,7 @@ jobs:
                   if not b.strip():
                       fail(
                           "Missing package manifest checklist template",
-                          "Could not read the packages-manifest block from '.github/dependency-checklist.md'.",
+                          f"Could not read the packages-manifest block from {SNIPPET_DOC}.",
                       )
                   blocks.append(b.strip())
               if need_other:
@@ -304,7 +325,7 @@ jobs:
                   if not b.strip():
                       fail(
                           "Missing other package.json checklist template",
-                          "Could not read the packages-other block from '.github/dependency-checklist.md'.",
+                          f"Could not read the packages-other block from {SNIPPET_DOC}.",
                       )
                   blocks.append(b.strip())
               if need_ws:
@@ -312,7 +333,7 @@ jobs:
                   if not b.strip():
                       fail(
                           "Missing workspace checklist template",
-                          "Could not read the workspace block from '.github/dependency-checklist.md'.",
+                          f"Could not read the workspace block from {SNIPPET_DOC}.",
                       )
                   blocks.append(b.strip())
               if not blocks:
@@ -460,7 +481,7 @@ jobs:
                   if not template.strip():
                       fail(
                           f"Missing {label} checklist template",
-                          f"Could not read the {label} block from '.github/dependency-checklist.md'.",
+                          f"Could not read the {label} block from {SNIPPET_DOC}.",
                       )
                   parts.append(current.strip() if current.strip() else template.strip())
               return "\n\n".join(parts)
@@ -538,7 +559,7 @@ jobs:
                   except RuntimeError as exc:
                       fail(
                           "PR description update failed",
-                          f"{log_message} Copy blocks from '.github/dependency-checklist.md' if needed. Details: {exc}",
+                          f"{log_message} Copy blocks from {SNIPPET_DOC} if needed. Details: {exc}",
                       )
 
               body = gh_pr_body(pr_number)
@@ -592,7 +613,7 @@ jobs:
                           "Add the dependency checklist manually",
                           "Could not update the PR description automatically. "
                           "This often happens for pull requests from forks. "
-                          "Copy the matching block(s) from '.github/dependency-checklist.md' "
+                          f"Copy the matching block(s) from {SNIPPET_DOC} "
                           "(packages-deps / packages-manifest / packages-other / workspace), "
                           "then complete all required checklist items. "
                           f"Details: {exc}",
@@ -700,11 +721,12 @@ jobs:
           manifest_lock_changed = env_bool("PACKAGE_JSON_CHANGED") or env_bool("LOCKFILE_CHANGED")
           workspace_changed = env_bool("WORKSPACE_CHANGED")
 
-          snippet_path = Path(os.environ["GITHUB_WORKSPACE"]) / ".github" / "dependency-checklist.md"
+          snippet_path = Path(os.environ["CHECKLIST_TEMPLATE_PATH"])
           if not snippet_path.exists():
               fail(
                   "Missing dependency checklist template",
-                  "The file '.github/dependency-checklist.md' does not exist in the repository.",
+                  f"The checklist template file does not exist at {snippet_path} "
+                  f"(expected {SNIPPET_DOC}).",
               )
           snippet = snippet_path.read_text(encoding="utf-8").strip()
 
