@@ -176,7 +176,7 @@ jobs:
 
       - name: Dependency checklist (inject, validate, or remove stale)
         env:
-          CHECKLIST_TEMPLATE_PATH: fylein/workflows/.github/workflows/dependency-checklist.md
+          CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
           CHECKLIST_HUB_REPOSITORY: ${{ format('{0}/workflows', github.repository_owner) }}
           CHECKLIST_HUB_REF: ${{ github.action_ref || 'main' }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
