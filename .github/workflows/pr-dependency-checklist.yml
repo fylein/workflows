@@ -51,12 +51,11 @@ jobs:
               - '**/package.json'
             lockfile:
               - pnpm-lock.yaml
-              - pnpm-lock.yml
             workspace:
               - pnpm-workspace.yaml
-              - pnpm-workspace.yml
 
   validate:
+    if: needs.relevant-files.outputs.any_relevant == 'true'
     name: Update and validate PR checklist
     needs: relevant-files
     runs-on: ubuntu-latest
@@ -65,25 +64,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect dependency-related file changes
-        id: dependency_files
-        uses: tj-actions/changed-files@v46
-        with:
-          separator: "\n"
-          files_yaml: |
-            package_json:
-              - package.json
-              - '**/package.json'
-            lockfile:
-              - pnpm-lock.yaml
-              - pnpm-lock.yml
-            workspace:
-              - pnpm-workspace.yaml
-              - pnpm-workspace.yml
-
       - id: checklist_hub_ref
         name: Resolve workflows hub ref (callee pin, not actions/checkout action_ref)
-        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
         env:
           WORKFLOW_REF: ${{ github.workflow_ref }}
           HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
