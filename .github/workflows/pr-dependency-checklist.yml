@@ -6,7 +6,8 @@
 # Injects only the checklist blocks that match the change type (deps vs scripts vs other package.json edits).
 # Required checklist items use <!-- required:... --> tags for validation.
 # Prunes inner sections when file paths or classified change types no longer apply.
-# Removes the whole checklist when none of those files change.
+# Removes the whole checklist when none of those files change (only while the validate job runs,
+# i.e. when package.json, pnpm-lock.yaml, or pnpm-workspace.yaml changed on this sync).
 #
 # Checklist markdown template: `.github/workflows/dependency-checklist.md` in THIS repository
 # (loaded via a second checkout using github.action_repository / github.action_ref). Callers do not
@@ -27,8 +28,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
+  relevant-files:
+    name: Relevant dependency paths changed
     if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      any_relevant: ${{ steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect dependency-related file changes
+        id: dependency_files
+        uses: tj-actions/changed-files@v46
+        with:
+          separator: "\n"
+          files_yaml: |
+            package_json:
+              - package.json
+              - '**/package.json'
+            lockfile:
+              - pnpm-lock.yaml
+              - pnpm-lock.yml
+            workspace:
+              - pnpm-workspace.yaml
+              - pnpm-workspace.yml
+
+  validate:
+    name: Update and validate PR checklist
+    needs: relevant-files
+    if: needs.relevant-files.outputs.any_relevant == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,8 +84,10 @@ jobs:
               - '**/package.json'
             lockfile:
               - pnpm-lock.yaml
+              - pnpm-lock.yml
             workspace:
               - pnpm-workspace.yaml
+              - pnpm-workspace.yml
 
       - name: Classify package.json changes
         id: classify
