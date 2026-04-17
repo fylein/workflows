@@ -88,7 +88,7 @@ jobs:
           WORKFLOW_REF: ${{ github.workflow_ref }}
           HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
           # Match the default branch of the `{owner}/workflows` hub repository.
-          DEFAULT_HUB_REF: master
+          DEFAULT_HUB_REF: add_dependency_checklist
         run: |
           set -euo pipefail
           wf="${WORKFLOW_REF}"
