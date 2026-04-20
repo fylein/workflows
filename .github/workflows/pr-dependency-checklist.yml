@@ -1,0 +1,771 @@
+# Reusable workflow (workflow_call). Call from a workflow that runs on pull_request so
+# github.event.pull_request is populated (same behavior as when this lived in the app repo).
+#
+# Injects/validates checklist when package.json, pnpm-lock.yaml, or pnpm-workspace.yaml change.
+# package.json edits are classified (deps/lockfile vs scripts/engines/version/packageManager vs other).
+# Injects only the checklist blocks that match the change type (deps vs scripts vs other package.json edits).
+# Required checklist items use <!-- required:... --> tags for validation.
+# Prunes inner sections when file paths or classified change types no longer apply.
+# Removes stale checklist when none of those files change on this sync (strip path).
+# Single job: one checkout and one changed-files pass (draft PRs are skipped).
+#
+# Checklist template: `.github/workflows/dependency-checklist.md` lives in this hub repo (with this
+# workflow). The runner checks out the application repo first, then clones the hub again.
+# No workflow_call inputs: hub is `${{ github.repository_owner }}/workflows` (same GitHub org as
+# the caller). Hub ref is parsed from github.workflow_ref (callee path@ref from uses: …@ref).
+# Do not use github.action_ref here: for actions/checkout@v4 it is the action tag "v4", not the
+# reusable workflow pin. Relative uses: ./.github/... falls back to DEFAULT_HUB_REF for the hub checkout.
+
+name: PR dependency checklist
+
+on:
+  workflow_call: {}
+
+# contents:read — checkout caller repo + template repo. pull-requests:write — gh pr view/edit on the caller PR (GH_TOKEN).
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-dependency-checklist-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Update and validate PR checklist
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect dependency-related file changes
+        id: dependency_files
+        uses: tj-actions/changed-files@v46
+        with:
+          separator: "\n"
+          files_yaml: |
+            package_json:
+              - package.json
+              - '**/package.json'
+            lockfile:
+              - pnpm-lock.yaml
+            workspace:
+              - pnpm-workspace.yaml
+
+      - id: checklist_hub_ref
+        name: Resolve workflows hub ref (callee pin, not actions/checkout action_ref)
+        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+          HUB_REPO_PREFIX: ${{ format('{0}/workflows/', github.repository_owner) }}
+          # Match the default branch of the `{owner}/workflows` hub repository.
+          DEFAULT_HUB_REF: add_dependency_checklist
+        run: |
+          set -euo pipefail
+          wf="${WORKFLOW_REF}"
+          prefix="${HUB_REPO_PREFIX}"
+          def="${DEFAULT_HUB_REF}"
+          ref="${wf##*@}"
+          if [ -z "${ref}" ] || [ "${ref}" = "${wf}" ]; then ref="${def}"; fi
+          case "${ref}" in refs/pull/*) ref="${def}" ;; esac
+          case "${wf}" in
+            "${prefix}"*) ;;
+            *) ref="${def}" ;;
+          esac
+          echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
+          echo "Checklist hub clone ref: ${ref} (workflow_ref=${wf})"
+
+      - name: Checkout checklist template (same-org workflows hub)
+        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ format('{0}/workflows', github.repository_owner) }}
+          ref: ${{ steps.checklist_hub_ref.outputs.ref }}
+          path: .github-dependency-checklist-template
+          fetch-depth: 1
+
+      - name: Classify package.json changes
+        id: classify
+        if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PACKAGE_JSON_FILES: ${{ steps.dependency_files.outputs.package_json_all_changed_files }}
+          LOCKFILE_CHANGED: ${{ steps.dependency_files.outputs.lockfile_any_changed }}
+        run: |
+          python3 << 'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          base_sha = os.environ["BASE_SHA"]
+          head_sha = os.environ["HEAD_SHA"]
+          package_json_files = [
+              p.strip()
+              for p in os.environ.get("PACKAGE_JSON_FILES", "").splitlines()
+              if p.strip()
+          ]
+
+          dependency_keys = {
+              "dependencies",
+              "devDependencies",
+              "peerDependencies",
+              "optionalDependencies",
+              "bundleDependencies",
+              "bundledDependencies",
+              "overrides",
+              "resolutions",
+          }
+
+          manifest_config_keys = {"scripts", "engines", "packageManager", "version"}
+
+          def load_json(commit_sha: str, path: str):
+              result = subprocess.run(
+                  ["git", "show", f"{commit_sha}:{path}"],
+                  capture_output=True,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  return {}
+              content = result.stdout.strip()
+              if not content:
+                  return {}
+              try:
+                  parsed = json.loads(content)
+                  return parsed if isinstance(parsed, dict) else {}
+              except json.JSONDecodeError:
+                  print(f"::error title=Invalid package.json::{path} is not valid JSON at {commit_sha}.")
+                  sys.exit(1)
+
+          dependency_fields_changed = False
+          manifest_config_changed = False
+
+          for path in package_json_files:
+              old = load_json(base_sha, path)
+              new = load_json(head_sha, path)
+              if any(old.get(key) != new.get(key) for key in dependency_keys):
+                  dependency_fields_changed = True
+              if any(old.get(key) != new.get(key) for key in manifest_config_keys):
+                  manifest_config_changed = True
+
+          lockfile_changed = os.environ.get("LOCKFILE_CHANGED") == "true"
+          need_dep_checklist = dependency_fields_changed or lockfile_changed
+          need_manifest_config_checklist = manifest_config_changed
+          package_json_touched = bool(package_json_files)
+          need_other_manifest_checklist = (
+              package_json_touched and not need_dep_checklist and not need_manifest_config_checklist
+          )
+
+          github_output = os.environ["GITHUB_OUTPUT"]
+          outputs = {
+              "need_dep_checklist": str(need_dep_checklist).lower(),
+              "need_manifest_config_checklist": str(need_manifest_config_checklist).lower(),
+              "need_other_manifest_checklist": str(need_other_manifest_checklist).lower(),
+          }
+          with open(github_output, "a", encoding="utf-8") as f:
+              for key, value in outputs.items():
+                  f.write(f"{key}={value}\n")
+          PY
+
+      - name: Dependency checklist (inject, validate, or remove stale)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKLIST_TEMPLATE_PATH: ${{ github.workspace }}/.github-dependency-checklist-template/.github/workflows/dependency-checklist.md
+          CHECKLIST_HUB_REPOSITORY: ${{ format('{0}/workflows', github.repository_owner) }}
+          CHECKLIST_HUB_REF: ${{ steps.checklist_hub_ref.outputs.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PACKAGE_JSON_CHANGED: ${{ steps.dependency_files.outputs.package_json_any_changed }}
+          LOCKFILE_CHANGED: ${{ steps.dependency_files.outputs.lockfile_any_changed }}
+          WORKSPACE_CHANGED: ${{ steps.dependency_files.outputs.workspace_any_changed }}
+          NEED_DEP_CHECKLIST: ${{ steps.classify.outputs.need_dep_checklist == 'true' }}
+          NEED_MANIFEST_CONFIG_CHECKLIST: ${{ steps.classify.outputs.need_manifest_config_checklist == 'true' }}
+          NEED_OTHER_MANIFEST_CHECKLIST: ${{ steps.classify.outputs.need_other_manifest_checklist == 'true' }}
+        run: |
+          python3 << 'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          _hub = os.environ.get("CHECKLIST_HUB_REPOSITORY", "").strip()
+          _ref = os.environ.get("CHECKLIST_HUB_REF", "").strip()
+          SNIPPET_DOC = (
+              f"`.github/workflows/dependency-checklist.md` in workflows hub `{_hub}` @ `{_ref}` "
+              "(single source of truth; not copied into the application repo)"
+          )
+
+          OUTER_START = "<!-- fyle:dependency-checklist -->"
+          OUTER_END = "<!-- /fyle:dependency-checklist -->"
+          LEGACY_PKG_START = "<!-- fyle:dependency-checklist:packages -->"
+          LEGACY_PKG_END = "<!-- /fyle:dependency-checklist:packages -->"
+          PKG_DEPS_START = "<!-- fyle:dependency-checklist:packages-deps -->"
+          PKG_DEPS_END = "<!-- /fyle:dependency-checklist:packages-deps -->"
+          PKG_MANIFEST_START = "<!-- fyle:dependency-checklist:packages-manifest -->"
+          PKG_MANIFEST_END = "<!-- /fyle:dependency-checklist:packages-manifest -->"
+          PKG_OTHER_START = "<!-- fyle:dependency-checklist:packages-other -->"
+          PKG_OTHER_END = "<!-- /fyle:dependency-checklist:packages-other -->"
+          WS_START = "<!-- fyle:dependency-checklist:workspace -->"
+          WS_END = "<!-- /fyle:dependency-checklist:workspace -->"
+          CONDITIONAL_REQUIRED_RE = re.compile(r"<!--\s*required:([a-z0-9_-]+)\s*-->")
+
+          def fail(title: str, message: str) -> None:
+              print(f"::error title={title}::{message}")
+              sys.exit(1)
+
+          def env_bool(name: str) -> bool:
+              return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+          def gh_pr_body(pr_number: str) -> str:
+              out = subprocess.check_output(
+                  ["gh", "pr", "view", pr_number, "--json", "body"],
+                  text=True,
+              )
+              return json.loads(out).get("body") or ""
+
+          def gh_pr_set_body(pr_number: str, body: str) -> None:
+              path = "/tmp/pr-body.md"
+              with open(path, "w", encoding="utf-8") as f:
+                  f.write(body)
+              r = subprocess.run(
+                  ["gh", "pr", "edit", pr_number, "--body-file", path],
+                  capture_output=True,
+                  text=True,
+              )
+              if r.returncode != 0:
+                  raise RuntimeError(r.stderr or r.stdout or "gh pr edit failed")
+
+          def count_occurrences(text: str, token: str) -> int:
+              return text.count(token)
+
+          def extract_unique_section(body: str, start_marker: str, end_marker: str, label: str):
+              start_count = count_occurrences(body, start_marker)
+              end_count = count_occurrences(body, end_marker)
+              if start_count == 0 and end_count == 0:
+                  return None
+              if start_count != 1 or end_count != 1:
+                  fail(
+                      f"Duplicate or malformed {label} checklist markers",
+                      f"Expected exactly one '{start_marker}' and one '{end_marker}' in the PR description.",
+                  )
+              start_index = body.find(start_marker)
+              end_index = body.find(end_marker)
+              if end_index < start_index:
+                  fail(
+                      f"Malformed {label} checklist markers",
+                      f"The closing marker for {label} appears before the opening marker.",
+                  )
+              return body[start_index + len(start_marker) : end_index]
+
+          def is_line_required(line: str, active_conditions: set[str]) -> bool:
+              for match in CONDITIONAL_REQUIRED_RE.findall(line):
+                  if match in active_conditions:
+                      return True
+              return False
+
+          def validate_required_checkboxes(
+              section: str,
+              section_label: str,
+              active_conditions: set[str],
+          ) -> None:
+              checkbox_lines = [
+                  line
+                  for line in section.splitlines()
+                  if re.search(r"^\s*-\s*\[[ xX]\]\s*", line)
+              ]
+              required_lines = [
+                  line for line in checkbox_lines if is_line_required(line, active_conditions)
+              ]
+              if not required_lines:
+                  fail(
+                      f"Missing required checklist items in {section_label}",
+                      f"No active required checkbox lines were found in the {section_label} section "
+                      f"(active tags: {', '.join(sorted(active_conditions)) or '(none)'}).",
+                  )
+              for index, line in enumerate(required_lines, start=1):
+                  match = re.search(r"^\s*-\s*\[([ xX])\]\s*", line)
+                  if not match:
+                      fail(
+                          f"Malformed checklist item in {section_label}",
+                          f"Required item {index} in the {section_label} section is not a valid markdown checkbox.",
+                      )
+                  if match.group(1).strip().lower() != "x":
+                      fail(
+                          "Incomplete dependency checklist",
+                          f"{section_label}: required item {index} must be checked.",
+                      )
+
+          def validate_outer_block(body: str) -> None:
+              start_count = count_occurrences(body, OUTER_START)
+              end_count = count_occurrences(body, OUTER_END)
+              if start_count == 0 and end_count == 0:
+                  return
+              if start_count != 1 or end_count != 1:
+                  fail(
+                      "Duplicate or malformed dependency checklist markers",
+                      f"Expected exactly one '{OUTER_START}' and one '{OUTER_END}' in the PR description.",
+                  )
+              if body.find(OUTER_END) < body.find(OUTER_START):
+                  fail(
+                      "Malformed dependency checklist",
+                      "The dependency checklist closing marker appears before the opening marker.",
+                  )
+
+          def extract_marker_block(full_text: str, start_m: str, end_m: str) -> str:
+              i = full_text.find(start_m)
+              j = full_text.find(end_m)
+              if i == -1 or j == -1:
+                  return ""
+              return full_text[i : j + len(end_m)]
+
+          def inner_has_any_checklist_section(inner: str) -> bool:
+              return (
+                  LEGACY_PKG_START in inner
+                  or PKG_DEPS_START in inner
+                  or PKG_MANIFEST_START in inner
+                  or PKG_OTHER_START in inner
+                  or WS_START in inner
+              )
+
+          def build_composed_checklist(
+              snippet_text: str,
+              need_dep: bool,
+              need_manifest: bool,
+              need_other: bool,
+              need_ws: bool,
+          ) -> str:
+              blocks = []
+              if need_dep:
+                  b = extract_marker_block(snippet_text, PKG_DEPS_START, PKG_DEPS_END)
+                  if not b.strip():
+                      fail(
+                          "Missing dependencies checklist template",
+                          f"Could not read the packages-deps block from {SNIPPET_DOC}.",
+                      )
+                  blocks.append(b.strip())
+              if need_manifest:
+                  b = extract_marker_block(snippet_text, PKG_MANIFEST_START, PKG_MANIFEST_END)
+                  if not b.strip():
+                      fail(
+                          "Missing package manifest checklist template",
+                          f"Could not read the packages-manifest block from {SNIPPET_DOC}.",
+                      )
+                  blocks.append(b.strip())
+              if need_other:
+                  b = extract_marker_block(snippet_text, PKG_OTHER_START, PKG_OTHER_END)
+                  if not b.strip():
+                      fail(
+                          "Missing other package.json checklist template",
+                          f"Could not read the packages-other block from {SNIPPET_DOC}.",
+                      )
+                  blocks.append(b.strip())
+              if need_ws:
+                  b = extract_marker_block(snippet_text, WS_START, WS_END)
+                  if not b.strip():
+                      fail(
+                          "Missing workspace checklist template",
+                          f"Could not read the workspace block from {SNIPPET_DOC}.",
+                      )
+                  blocks.append(b.strip())
+              if not blocks:
+                  fail(
+                      "Internal checklist error",
+                      "Expected at least one checklist section when this job runs.",
+                  )
+              inner = "\n\n".join(blocks)
+              return (
+                  f"{OUTER_START}\n## Dependency / pnpm review checklist\n\n"
+                  f"{inner}\n\n{OUTER_END}\n"
+              )
+
+          def refresh_outer_inner(body: str):
+              outer_start = body.find(OUTER_START) + len(OUTER_START)
+              outer_end = body.find(OUTER_END)
+              return outer_start, outer_end, body[outer_start:outer_end]
+
+          def remove_block_between_markers(text: str, start_m: str, end_m: str):
+              """Remove one start_m … end_m block from text. Returns (new_text, removed)."""
+              i = text.find(start_m)
+              if i == -1:
+                  return text, False
+              j = text.find(end_m, i)
+              if j == -1:
+                  return text, False
+              j += len(end_m)
+              before = text[:i].rstrip()
+              after = text[j:].lstrip()
+              new_text = before + ("\n\n" if before and after else "") + after
+              return new_text, True
+
+          def prune_obsolete_sections(body: str, m_changed: bool, w_changed: bool):
+              """Drop inner sections whose files are no longer part of the PR diff (e.g. reverted pnpm-workspace.yaml)."""
+              if OUTER_START not in body or OUTER_END not in body:
+                  return body, False
+              outer_start, outer_end, inner = refresh_outer_inner(body)
+              inner_work = inner
+              changed = False
+              if not w_changed:
+                  inner_work, d = remove_block_between_markers(inner_work, WS_START, WS_END)
+                  changed = changed or d
+              if not m_changed:
+                  for start_m, end_m in (
+                      (LEGACY_PKG_START, LEGACY_PKG_END),
+                      (PKG_DEPS_START, PKG_DEPS_END),
+                      (PKG_MANIFEST_START, PKG_MANIFEST_END),
+                      (PKG_OTHER_START, PKG_OTHER_END),
+                  ):
+                      inner_work, d = remove_block_between_markers(inner_work, start_m, end_m)
+                      changed = changed or d
+              if not changed:
+                  return body, False
+              inner_work = inner_work.strip("\n")
+              if not inner_work or not inner_has_any_checklist_section(inner_work):
+                  print(
+                      "Removing dependency checklist (no sections left after pruning obsolete blocks)."
+                  )
+                  start = body.find(OUTER_START)
+                  end_inclusive = body.find(OUTER_END) + len(OUTER_END)
+                  before = body[:start].rstrip()
+                  after = body[end_inclusive:].lstrip()
+                  nb = (before + ("\n\n" if before and after else "") + after).rstrip()
+                  return (nb + "\n" if nb else ""), True
+              new_body = body[:outer_start] + inner_work + body[outer_end:]
+              return new_body, True
+
+          def migrate_legacy_packages_block(body: str) -> tuple[str, bool]:
+              """Remove the old monolithic `packages` block so granular sections can be injected."""
+              if OUTER_START not in body or OUTER_END not in body:
+                  return body, False
+              outer_start, outer_end, inner = refresh_outer_inner(body)
+              if LEGACY_PKG_START not in inner:
+                  return body, False
+              inner_new, removed = remove_block_between_markers(inner, LEGACY_PKG_START, LEGACY_PKG_END)
+              if not removed:
+                  return body, False
+              if not inner_new.strip() or not inner_has_any_checklist_section(inner_new):
+                  start = body.find(OUTER_START)
+                  end_inclusive = body.find(OUTER_END) + len(OUTER_END)
+                  before = body[:start].rstrip()
+                  after = body[end_inclusive:].lstrip()
+                  nb = (before + ("\n\n" if before and after else "") + after).rstrip()
+                  return (nb + "\n" if nb else ""), True
+              new_body = body[:outer_start] + inner_new + body[outer_end:]
+              return new_body, True
+
+          def prune_inactive_package_subsections(
+              body: str,
+              manifest_lock_in_diff: bool,
+              need_dep: bool,
+              need_manifest: bool,
+              need_other: bool,
+          ) -> tuple[str, bool]:
+              """Remove package.json-related inner blocks that no longer match the classified diff."""
+              if OUTER_START not in body or OUTER_END not in body or not manifest_lock_in_diff:
+                  return body, False
+              outer_start, outer_end, inner = refresh_outer_inner(body)
+              inner_work = inner
+              changed = False
+              if PKG_DEPS_START in inner_work and not need_dep:
+                  inner_work, d = remove_block_between_markers(inner_work, PKG_DEPS_START, PKG_DEPS_END)
+                  changed = changed or d
+              if PKG_MANIFEST_START in inner_work and not need_manifest:
+                  inner_work, d = remove_block_between_markers(inner_work, PKG_MANIFEST_START, PKG_MANIFEST_END)
+                  changed = changed or d
+              if PKG_OTHER_START in inner_work and not need_other:
+                  inner_work, d = remove_block_between_markers(inner_work, PKG_OTHER_START, PKG_OTHER_END)
+                  changed = changed or d
+              if not changed:
+                  return body, False
+              inner_work = inner_work.strip("\n")
+              if not inner_work or not inner_has_any_checklist_section(inner_work):
+                  start = body.find(OUTER_START)
+                  end_inclusive = body.find(OUTER_END) + len(OUTER_END)
+                  before = body[:start].rstrip()
+                  after = body[end_inclusive:].lstrip()
+                  nb = (before + ("\n\n" if before and after else "") + after).rstrip()
+                  return (nb + "\n" if nb else ""), True
+              new_body = body[:outer_start] + inner_work + body[outer_end:]
+              return new_body, True
+
+          def canonical_inner_checklist(
+              inner: str,
+              snippet: str,
+              manifest_lock_in_diff: bool,
+              need_dep: bool,
+              need_manifest: bool,
+              need_other: bool,
+              need_ws: bool,
+          ) -> str:
+              """Build inner content as ordered template blocks, keeping existing block text when markers match."""
+              parts = []
+              sequence = (
+                  (PKG_DEPS_START, PKG_DEPS_END, manifest_lock_in_diff and need_dep, "packages-deps"),
+                  (PKG_MANIFEST_START, PKG_MANIFEST_END, manifest_lock_in_diff and need_manifest, "packages-manifest"),
+                  (PKG_OTHER_START, PKG_OTHER_END, manifest_lock_in_diff and need_other, "packages-other"),
+                  (WS_START, WS_END, need_ws, "workspace"),
+              )
+              for start_m, end_m, want, label in sequence:
+                  if not want:
+                      continue
+                  current = extract_marker_block(inner, start_m, end_m)
+                  template = extract_marker_block(snippet, start_m, end_m)
+                  if not template.strip():
+                      fail(
+                          f"Missing {label} checklist template",
+                          f"Could not read the {label} block from {SNIPPET_DOC}.",
+                      )
+                  parts.append(current.strip() if current.strip() else template.strip())
+              return "\n\n".join(parts)
+
+          def synchronize_inner_checklist(
+              body: str,
+              snippet: str,
+              manifest_lock_in_diff: bool,
+              need_dep: bool,
+              need_manifest: bool,
+              need_other: bool,
+              need_ws: bool,
+          ) -> tuple[str, bool]:
+              """Align the outer checklist inner region with the blocks that should exist for this PR."""
+              if OUTER_START not in body or OUTER_END not in body:
+                  return body, False
+              outer_start, outer_end, inner = refresh_outer_inner(body)
+              new_inner = canonical_inner_checklist(
+                  inner,
+                  snippet,
+                  manifest_lock_in_diff,
+                  need_dep,
+                  need_manifest,
+                  need_other,
+                  need_ws,
+              )
+              if new_inner.strip() == inner.strip():
+                  return body, False
+              new_body = body[:outer_start] + new_inner + body[outer_end:]
+              return new_body, True
+
+          def strip_stale_checklist(body: str):
+              """Remove outer checklist block; returns (new_body, should_write). Caller ensures OUTER_START in body."""
+              if body.count(OUTER_START) != 1 or body.count(OUTER_END) != 1:
+                  print(
+                      "::warning::Duplicate or incomplete checklist markers; "
+                      "not removing automatically. Edit the PR description manually if needed."
+                  )
+                  return body, False
+              start = body.find(OUTER_START)
+              end = body.find(OUTER_END)
+              if end == -1 or end < start:
+                  print("::warning::Malformed checklist markers; not removing automatically.")
+                  return body, False
+              end_inclusive = end + len(OUTER_END)
+              before = body[:start].rstrip()
+              after = body[end_inclusive:].lstrip()
+              new_body = (before + ("\n\n" if before and after else "") + after).rstrip()
+              if new_body:
+                  new_body += "\n"
+              print(
+                  "Removing dependency checklist from the PR description "
+                  "(no manifest/lock/workspace changes on this PR)."
+              )
+              return new_body, True
+
+          def run_inject_and_validate(pr_number: str, snippet: str, manifest_lock_changed: bool, workspace_changed: bool) -> None:
+              need_dep = env_bool("NEED_DEP_CHECKLIST")
+              need_manifest_config = env_bool("NEED_MANIFEST_CONFIG_CHECKLIST")
+              need_other_manifest = env_bool("NEED_OTHER_MANIFEST_CHECKLIST")
+
+              want_dep = manifest_lock_changed and need_dep
+              want_manifest = manifest_lock_changed and need_manifest_config
+              want_other = manifest_lock_changed and need_other_manifest
+              want_ws = workspace_changed
+
+              def commit_pr_body(updated: str, log_message: str) -> str:
+                  try:
+                      to_write = updated.rstrip()
+                      if to_write:
+                          to_write += "\n"
+                      gh_pr_set_body(pr_number, to_write)
+                      print(log_message)
+                      return gh_pr_body(pr_number)
+                  except RuntimeError as exc:
+                      fail(
+                          "PR description update failed",
+                          f"{log_message} Copy blocks from {SNIPPET_DOC} if needed. Details: {exc}",
+                      )
+
+              body = gh_pr_body(pr_number)
+              validate_outer_block(body)
+
+              body, legacy_migrated = migrate_legacy_packages_block(body)
+              if legacy_migrated:
+                  body = commit_pr_body(
+                      body,
+                      "Removed legacy combined package checklist block; refreshing sections from the template.",
+                  )
+              validate_outer_block(body)
+
+              body, pruned = prune_obsolete_sections(body, manifest_lock_changed, workspace_changed)
+              if pruned:
+                  body = commit_pr_body(
+                      body,
+                      "Pruned checklist sections that no longer apply (file changes reverted for that category).",
+                  )
+              validate_outer_block(body)
+
+              body, pruned_class = prune_inactive_package_subsections(
+                  body,
+                  manifest_lock_changed,
+                  need_dep,
+                  need_manifest_config,
+                  need_other_manifest,
+              )
+              if pruned_class:
+                  body = commit_pr_body(
+                      body,
+                      "Pruned checklist sections that no longer match the classified package.json / lockfile changes.",
+                  )
+              validate_outer_block(body)
+
+              if OUTER_START not in body:
+                  print("Appending dependency checklist to the PR description.")
+                  composed = build_composed_checklist(
+                      snippet,
+                      need_dep=want_dep,
+                      need_manifest=want_manifest,
+                      need_other=want_other,
+                      need_ws=want_ws,
+                  )
+                  new_body = (body.rstrip() + "\n\n" + composed).strip() + "\n"
+                  try:
+                      gh_pr_set_body(pr_number, new_body)
+                      body = new_body
+                  except RuntimeError as exc:
+                      fail(
+                          "Add the dependency checklist manually",
+                          "Could not update the PR description automatically. "
+                          "This often happens for pull requests from forks. "
+                          f"Copy the matching block(s) from {SNIPPET_DOC} "
+                          "(packages-deps / packages-manifest / packages-other / workspace), "
+                          "then complete all required checklist items. "
+                          f"Details: {exc}",
+                      )
+
+              validate_outer_block(body)
+
+              body, synced = synchronize_inner_checklist(
+                  body,
+                  snippet,
+                  manifest_lock_changed,
+                  need_dep,
+                  need_manifest_config,
+                  need_other_manifest,
+                  workspace_changed,
+              )
+              if synced:
+                  body = commit_pr_body(
+                      body,
+                      "Updated the checklist inner sections to match the current PR change types.",
+                  )
+              validate_outer_block(body)
+
+              if want_dep:
+                  deps_section = extract_unique_section(body, PKG_DEPS_START, PKG_DEPS_END, "dependencies / lockfile")
+                  if deps_section is None:
+                      fail(
+                          "Missing dependencies / lockfile checklist",
+                          "Include the checklist block "
+                          f"({PKG_DEPS_START} ... {PKG_DEPS_END}).",
+                      )
+                  validate_required_checkboxes(deps_section, "Dependencies / lockfile", {"dependency-change"})
+
+              if want_manifest:
+                  manifest_section = extract_unique_section(
+                      body,
+                      PKG_MANIFEST_START,
+                      PKG_MANIFEST_END,
+                      "scripts / engines / version",
+                  )
+                  if manifest_section is None:
+                      fail(
+                          "Missing scripts / engines / version checklist",
+                          "Include the checklist block "
+                          f"({PKG_MANIFEST_START} ... {PKG_MANIFEST_END}).",
+                      )
+                  validate_required_checkboxes(
+                      manifest_section,
+                      "Scripts, engines, version, or package manager",
+                      {"manifest-config-change"},
+                  )
+
+              if want_other:
+                  other_section = extract_unique_section(
+                      body,
+                      PKG_OTHER_START,
+                      PKG_OTHER_END,
+                      "other package.json",
+                  )
+                  if other_section is None:
+                      fail(
+                          "Missing other package.json checklist",
+                          "Include the checklist block "
+                          f"({PKG_OTHER_START} ... {PKG_OTHER_END}).",
+                      )
+                  validate_required_checkboxes(other_section, "Other package.json edits", {"other-manifest-change"})
+
+              if want_ws:
+                  ws_section = extract_unique_section(body, WS_START, WS_END, "workspace")
+                  if ws_section is None:
+                      fail(
+                          "Missing workspace checklist",
+                          "Include the pnpm-workspace.yaml checklist block "
+                          f"({WS_START} ... {WS_END}).",
+                      )
+                  validate_required_checkboxes(ws_section, "Workspace", {"workspace"})
+
+              print("Dependency checklist is complete for the changed file categories.")
+
+          def run_strip_stale(pr_number: str) -> None:
+              body = gh_pr_body(pr_number)
+              if OUTER_START not in body:
+                  print(
+                      "No pnpm-workspace.yaml, pnpm-lock.yaml, or package.json changes; "
+                      "checklist not required."
+                  )
+                  return
+              new_body, should_write = strip_stale_checklist(body)
+              if not should_write:
+                  return
+              try:
+                  gh_pr_set_body(pr_number, new_body)
+              except RuntimeError as exc:
+                  print(
+                      "::warning::Could not update the PR description (common on fork PRs). "
+                      f"Remove the checklist block manually if needed. Details: {exc}"
+                  )
+                  return
+              print(
+                  "No dependency file changes in this PR; removed stale checklist from the description."
+              )
+
+          # --- main ---
+          pr_number = os.environ["PR_NUMBER"]
+          manifest_lock_changed = env_bool("PACKAGE_JSON_CHANGED") or env_bool("LOCKFILE_CHANGED")
+          workspace_changed = env_bool("WORKSPACE_CHANGED")
+
+          if manifest_lock_changed or workspace_changed:
+              snippet_path = Path(os.environ["CHECKLIST_TEMPLATE_PATH"])
+              if not snippet_path.exists():
+                  fail(
+                      "Missing dependency checklist template",
+                      f"The checklist template file does not exist at {snippet_path} "
+                      f"(expected {SNIPPET_DOC}).",
+                  )
+              snippet = snippet_path.read_text(encoding="utf-8").strip()
+              run_inject_and_validate(pr_number, snippet, manifest_lock_changed, workspace_changed)
+          else:
+              run_strip_stale(pr_number)
+          PY
