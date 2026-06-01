@@ -54,15 +54,15 @@ jobs:
       COMMAND_TO_RUN: ${{ inputs.command_to_run }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ inputs.node_version }}
 
       - name: Setup pnpm
         if: inputs.package_manager == 'pnpm'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Checkout master branch
         run: |
@@ -97,7 +97,7 @@ jobs:
           echo "duplication=$percent" >> "$GITHUB_OUTPUT"
 
       - name: Post duplication comment - ${{ inputs.tech_stack }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -177,7 +177,7 @@ jobs:
 
       - name: Check PR approvals for bypass
         id: approvals
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: reviews } = await github.rest.pulls.listReviews({
@@ -195,7 +195,7 @@ jobs:
 
       - name: Comment if duplication > threshold and not approved
         if: fromJSON(steps.duplication.outputs.duplication) > env.DUPLICATION_THRESHOLD && steps.approvals.outputs.approved_by_reviewer == 'false'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { data: comments } = await github.rest.issues.listComments({
