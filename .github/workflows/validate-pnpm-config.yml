@@ -14,13 +14,13 @@ jobs:
       pnpm_workspace_changed: ${{ steps.workspace_files.outputs.any_changed }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Detect pnpm-workspace.yaml changes
         id: workspace_files
-        uses: tj-actions/changed-files@v47.0.5
+        uses: tj-actions/changed-files@v47.0.6
         with:
           files: |
             pnpm-workspace.yaml
@@ -51,7 +51,7 @@ jobs:
     if: needs.require-pnpm-files.outputs.pnpm_workspace_changed == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate pnpm-workspace.yaml
         shell: bash

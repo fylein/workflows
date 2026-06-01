@@ -13,7 +13,7 @@
 # workflow). The runner checks out the application repo first, then clones the hub again.
 # No workflow_call inputs: hub is `${{ github.repository_owner }}/workflows` (same GitHub org as
 # the caller). Hub ref is parsed from github.workflow_ref (callee path@ref from uses: …@ref).
-# Do not use github.action_ref here: for actions/checkout@v4 it is the action tag "v4", not the
+# Do not use github.action_ref here: for actions/checkout@v6 it is the action tag "v6", not the
 # reusable workflow pin. Relative uses: ./.github/... falls back to DEFAULT_HUB_REF for the hub checkout.
 
 name: PR dependency checklist
@@ -36,13 +36,13 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Detect dependency-related file changes
         id: dependency_files
-        uses: tj-actions/changed-files@v46
+        uses: tj-actions/changed-files@v47
         with:
           separator: "\n"
           files_yaml: |
@@ -79,7 +79,7 @@ jobs:
 
       - name: Checkout checklist template (same-org workflows hub)
         if: steps.dependency_files.outputs.package_json_any_changed == 'true' || steps.dependency_files.outputs.lockfile_any_changed == 'true' || steps.dependency_files.outputs.workspace_any_changed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ format('{0}/workflows', github.repository_owner) }}
           ref: ${{ steps.checklist_hub_ref.outputs.ref }}
