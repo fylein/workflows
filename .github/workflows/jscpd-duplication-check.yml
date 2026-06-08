@@ -64,6 +64,17 @@ jobs:
         if: inputs.package_manager == 'pnpm'
         uses: pnpm/action-setup@v6
 
+      - name: Setup PNPM global bin
+        if: inputs.package_manager == 'pnpm'
+        run: |
+          echo "PNPM_HOME=$HOME/.local/share/pnpm" >> $GITHUB_ENV
+          echo "$HOME/.local/share/pnpm" >> $GITHUB_PATH
+
+      - name: Install JSCPD v4
+        if: inputs.package_manager == 'pnpm'
+        run: |
+          pnpm add -g jscpd@4
+
       - name: Checkout master branch
         run: |
           git fetch origin master --depth 1
