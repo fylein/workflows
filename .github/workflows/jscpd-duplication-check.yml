@@ -24,10 +24,10 @@ on:
         required: true
         type: string
       node_version:
-        description: 'Node.js version for running JSCPD (e.g. 20.17.0)'
+        description: 'Node.js version for running JSCPD (e.g. 24.12.0)'
         required: false
         type: string
-        default: '20.17.0'
+        default: '24.12.0'
       package_manager:
         description: 'Package manager for dependency install and cache (npm and pnpm both cache node_modules)'
         required: false
