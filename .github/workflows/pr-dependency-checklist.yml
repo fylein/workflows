@@ -33,7 +33,10 @@ concurrency:
 jobs:
   validate:
     name: Update and validate PR checklist
-    if: github.event.pull_request.draft == false
+    # Skip on merge_group: this job needs PR data (PR number, base/head SHA, PR body) that does not
+    # exist in a merge queue run. The job is still evaluated (the caller invokes this reusable
+    # workflow), so it reports "skipped" = success and satisfies the required check without hanging.
+    if: ${{ github.event_name != 'merge_group' && github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
