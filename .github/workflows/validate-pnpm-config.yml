@@ -58,11 +58,21 @@ jobs:
         shell: bash
         env:
           WORKFLOW_REF: ${{ github.workflow_ref }}
+          WORKFLOWS_FALLBACK_REF: allow_min_release_exlcude_for_fylein_packages
         run: |
           set -euo pipefail
           ref="${WORKFLOW_REF##*@}"
-          ref="${ref#refs/heads/}"
-          ref="${ref#refs/tags/}"
+
+          # Caller workflows on pull_request can resolve to refs/pull/<id>/merge, which
+          # does not exist in the workflows repository. Fall back to the configured branch.
+          if [[ -z "${ref}" || "${ref}" == refs/pull/* ]]; then
+            ref="${WORKFLOWS_FALLBACK_REF}"
+          elif [[ "${ref}" == refs/heads/* ]]; then
+            ref="${ref#refs/heads/}"
+          elif [[ "${ref}" == refs/tags/* ]]; then
+            ref="${ref#refs/tags/}"
+          fi
+
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout workflows repository for validator script
