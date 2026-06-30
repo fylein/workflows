@@ -2,6 +2,27 @@
 
 This README provides detailed information about two GitHub Actions workflows used for code quality checks: JSCPD Duplication Check and EOL/Outdated JS Scan.
 
+## Validate pnpm config
+
+The repository includes a reusable pnpm workspace validator used by `.github/workflows/validate-pnpm-config.yml`.
+
+- Validator script: `scripts/validate_pnpm_workspace.py`
+- Unit tests: `tests/test_validate_pnpm_workspace.py`
+- Sample test fixtures: `tests/fixtures/pnpm-workspace.*.yaml`
+
+Run tests locally:
+
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+Run a full validator test suite (unit + CLI end-to-end checks):
+
+```bash
+python3 -m pip install --disable-pip-version-check -q PyYAML==6.0.2
+python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
 ## JSCPD Duplication Check
 
 ### What It Does

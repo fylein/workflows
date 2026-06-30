@@ -1,0 +1,9 @@
+minimumReleaseAge: 1440
+verifyDepsBeforeRun: error
+trustPolicy: no-downgrade
+blockExoticSubdeps: true
+strictDepBuilds: true
+allowBuilds: []
+minimumReleaseAgeExclude:
+  - "@fylein/sem-lib"
+  - "@other/package"
