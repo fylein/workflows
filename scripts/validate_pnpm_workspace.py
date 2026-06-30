@@ -66,7 +66,12 @@ def validate_workspace_data(data: object) -> list[str]:
                     f"value (minutes) and at least {MIN_MINIMUM_RELEASE_AGE}."
                 )
             else:
-                if n < MIN_MINIMUM_RELEASE_AGE:
+                if n != n or n in (float("inf"), float("-inf")):
+                    errors.append(
+                        "pnpm-workspace.yaml: minimumReleaseAge must be a numeric "
+                        f"value (minutes) and at least {MIN_MINIMUM_RELEASE_AGE}."
+                    )
+                elif n < MIN_MINIMUM_RELEASE_AGE:
                     errors.append(
                         "pnpm-workspace.yaml: minimumReleaseAge must be at least "
                         f"{MIN_MINIMUM_RELEASE_AGE} minutes (found {mra!r})."

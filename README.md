@@ -10,7 +10,7 @@ The repository includes a reusable pnpm workspace validator used by `.github/wor
 - Unit tests: `tests/test_validate_pnpm_workspace.py`
 - Sample test fixtures: `tests/fixtures/pnpm-workspace.*.yaml`
 
-Run tests locally:
+Run tests locally (requires `PyYAML==6.0.2`; install it if needed):
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py'

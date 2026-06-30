@@ -8,9 +8,9 @@ MODULE_PATH = ROOT / "scripts" / "validate_pnpm_workspace.py"
 FIXTURES_DIR = ROOT / "tests" / "fixtures"
 
 spec = importlib.util.spec_from_file_location("validate_pnpm_workspace", MODULE_PATH)
-module = importlib.util.module_from_spec(spec)
 assert spec is not None
 assert spec.loader is not None
+module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
