@@ -63,9 +63,10 @@ jobs:
           set -euo pipefail
           ref="${WORKFLOW_REF##*@}"
 
-          # Caller workflows on pull_request can resolve to refs/pull/<id>/merge, which
-          # does not exist in the workflows repository. Fall back to the configured branch.
-          if [[ -z "${ref}" || "${ref}" == refs/pull/* ]]; then
+          # Caller workflows on pull_request resolve to refs/pull/<id>/merge and on
+          # merge_group to refs/heads/gh-readonly-queue/*, neither of which exists in
+          # the workflows repository. Fall back to the configured branch.
+          if [[ -z "${ref}" || "${ref}" == refs/pull/* || "${ref}" == refs/heads/gh-readonly-queue/* ]]; then
             ref="${WORKFLOWS_FALLBACK_REF}"
           elif [[ "${ref}" == refs/heads/* ]]; then
             ref="${ref#refs/heads/}"
