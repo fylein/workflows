@@ -23,7 +23,7 @@ on:
         default: 'npm'
     secrets:
       github-token:
-        description: 'GitHub token for creating/updating comments'
+        description: 'GitHub token for package installation and creating/updating comments'
         required: true
       nvd-api-key:
         description: 'NVD API key for the dependency check'
@@ -95,6 +95,7 @@ jobs:
         if: inputs.package_manager == 'npm' && steps.node-cache.outputs.cache-hit != 'true'
         env:
           NPM_RUN_CMD: ${{ inputs.npm-run-cmd }}
+          NODE_AUTH_TOKEN: ${{ secrets.github-token }}
         shell: bash
         run: |
           bash -lc "$NPM_RUN_CMD"
@@ -103,6 +104,7 @@ jobs:
         if: inputs.package_manager == 'pnpm' && steps.pnpm-cache.outputs.cache-hit != 'true'
         env:
           NPM_RUN_CMD: ${{ inputs.npm-run-cmd }}
+          NODE_AUTH_TOKEN: ${{ secrets.github-token }}
         shell: bash
         run: |
           bash -lc "$NPM_RUN_CMD"
