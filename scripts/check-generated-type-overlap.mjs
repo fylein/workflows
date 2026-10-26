@@ -194,35 +194,54 @@ const isGeneratedDerived = (declaration, generatedImports) =>
     referencesGeneratedTypeThroughWrappers(type, generatedImports),
   );
 
+const getTypeDeclarations = (type) =>
+  [type.aliasSymbol, type.getSymbol()].flatMap(
+    (symbol) => symbol?.declarations ?? [],
+  );
+
+const isExternalType = (type) =>
+  getTypeDeclarations(type).some((declaration) => {
+    const sourceFile = declaration.getSourceFile();
+    const fileName = sourceFile.fileName.replaceAll("\\", "/");
+    return (
+      sourceFile.hasNoDefaultLib ||
+      (fileName.includes("/node_modules/") &&
+        !fileName.includes("/@fylein/types/"))
+    );
+  });
+
+const getComparableTypes = (type) =>
+  (type.isIntersection() ? type.types : [type]).filter(
+    (member) =>
+      !(member.flags & leafTypeFlags) && !isExternalType(member),
+  );
+
 const getPropertyNames = (checker, declaration) => {
   const type = checker.getTypeAtLocation(declaration.name);
-  return checker
-    .getPropertiesOfType(type)
-    .map((property) => property.getName())
+  return [
+    ...new Set(
+      getComparableTypes(type).flatMap((member) =>
+        checker
+          .getPropertiesOfType(member)
+          .map((property) => property.getName()),
+      ),
+    ),
+  ]
     .filter((name) => name !== "__proto__")
     .sort();
 };
 
 const leafTypeFlags =
-  ts.TypeFlags.Any |
-  ts.TypeFlags.Unknown |
-  ts.TypeFlags.Never |
-  ts.TypeFlags.StringLike |
-  ts.TypeFlags.NumberLike |
-  ts.TypeFlags.BooleanLike |
-  ts.TypeFlags.BigIntLike |
-  ts.TypeFlags.ESSymbolLike;
+  ts.TypeFlags.Intrinsic |
+  ts.TypeFlags.Primitive |
+  ts.TypeFlags.TypeParameter;
 
 const getStructuralSignatures = (checker, declaration) => {
   const signatures = new Set();
   const rootType = checker.getTypeAtLocation(declaration.name);
 
   const visit = (type, path, ancestors, depth) => {
-    if (
-      type.flags & leafTypeFlags ||
-      type.getSymbol()?.getName() === "Date" ||
-      checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0
-    ) {
+    if (type.flags & leafTypeFlags) {
       signatures.add(`${path}:value`);
       return;
     }
@@ -247,6 +266,15 @@ const getStructuralSignatures = (checker, declaration) => {
       return;
     }
 
+    if (type.isIntersection()) {
+      const nextAncestors = new Set(ancestors);
+      nextAncestors.add(type);
+      for (const member of getComparableTypes(type)) {
+        visit(member, path, nextAncestors, depth + 1);
+      }
+      return;
+    }
+
     if (checker.isArrayType(type) || checker.isTupleType(type)) {
       signatures.add(`${path}:array`);
       const nextAncestors = new Set(ancestors);
@@ -255,6 +283,16 @@ const getStructuralSignatures = (checker, declaration) => {
       for (const elementType of typeArguments) {
         visit(elementType, `${path}[]`, nextAncestors, depth + 1);
       }
+      return;
+    }
+
+    if (isExternalType(type)) {
+      signatures.add(`${path}:value`);
+      return;
+    }
+
+    if (checker.getSignaturesOfType(type, ts.SignatureKind.Call).length > 0) {
+      signatures.add(`${path}:value`);
       return;
     }
 
@@ -426,7 +464,6 @@ export const analyzeModelFiles = ({
       if (!isExportedTypeDeclaration(declaration)) {
         continue;
       }
-
       const localKeys = getPropertyNames(checker, declaration);
       if (localKeys.length === 0) {
         continue;

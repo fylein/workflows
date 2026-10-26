@@ -141,7 +141,7 @@ test("does not treat matching parent keys as matching nested objects or array el
   }
 });
 
-test("only exempts top-level generated intersections, not nested generated properties", () => {
+test("traverses generated types but treats external types as opaque", () => {
   const temporaryDirectory = mkdtempSync(
     join(tmpdir(), "generated-type-overlap-derived-"),
   );
@@ -150,9 +150,14 @@ test("only exempts top-level generated intersections, not nested generated prope
     temporaryDirectory,
     "node_modules/@fylein/types",
   );
+  const externalPackageDirectory = join(
+    temporaryDirectory,
+    "node_modules/external-package",
+  );
   const modelPath = join(temporaryDirectory, "generated-usage.model.ts");
   mkdirSync(generatedDirectory, { recursive: true });
   mkdirSync(packageDirectory, { recursive: true });
+  mkdirSync(externalPackageDirectory, { recursive: true });
   const generatedType = `export type ExpenseFieldOut = {
       id: string;
       name: string;
@@ -165,8 +170,17 @@ test("only exempts top-level generated intersections, not nested generated prope
     `${JSON.stringify({ exports: { "./cross-role": "./cross-role.d.ts" } })}\n`,
   );
   writeFileSync(
+    join(externalPackageDirectory, "index.d.ts"),
+    "export type ExternalState = { deeply: { nested: string } };\n",
+  );
+  writeFileSync(
+    join(externalPackageDirectory, "package.json"),
+    `${JSON.stringify({ types: "./index.d.ts" })}\n`,
+  );
+  writeFileSync(
     modelPath,
     `import { ExpenseFieldOut } from '@fylein/types/cross-role';
+    import { ExternalState } from 'external-package';
 
     type Wrapper<T> = Readonly<T>;
 
@@ -176,6 +190,15 @@ test("only exempts top-level generated intersections, not nested generated prope
       expenseField: ExpenseFieldOut;
       label: string;
       selected: boolean;
+    };
+
+    export type WindowWithPerformanceObserver = Window & {
+      PerformanceObserver?: typeof PerformanceObserver;
+    };
+
+    export type ExternalStateContainer = {
+      label: string;
+      state: ExternalState;
     };\n`,
   );
 
@@ -193,9 +216,18 @@ test("only exempts top-level generated intersections, not nested generated prope
     const container = report.results.find(
       (result) => result.exportName === "ExpenseFieldContainer",
     );
+    const windowExtension = report.results.find(
+      (result) => result.exportName === "WindowWithPerformanceObserver",
+    );
+    const externalContainer = report.results.find(
+      (result) => result.exportName === "ExternalStateContainer",
+    );
 
     assert.equal(extension.generatedDerived, true);
     assert.equal(container.generatedDerived, false);
+    assert.ok(container.localStructuralSignatureCount > 3);
+    assert.equal(windowExtension.localStructuralSignatureCount, 1);
+    assert.equal(externalContainer.localStructuralSignatureCount, 2);
   } finally {
     rmSync(temporaryDirectory, { recursive: true });
   }
