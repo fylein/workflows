@@ -23,6 +23,26 @@ python3 -m pip install --disable-pip-version-check -q PyYAML==6.0.2
 python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
+## Generated types model overlap
+
+This workflow checks changed `*.model.ts` files against the OpenAPI models installed from `@fylein/types`. It reports the closest generated type, comments on matching files, and requires approval from the API-model reviewers when the model meets the configured structural-overlap threshold and minimum field count.
+
+Add the reusable workflow as a job in each repository where this check is required:
+
+```yaml
+jobs:
+  generated_type_overlap:
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    uses: fylein/workflows/.github/workflows/generated-types-model-overlap.yml@master
+    with:
+      project_root: app-v2
+      tsconfig_path: app-v2/tsconfig.base.json
+      install_filter: app-v2
+```
+
 ## JSCPD Duplication Check
 
 ### What It Does
@@ -185,4 +205,4 @@ If you are assigned as a reviewer on a pull request where the EOL/Outdated JS Sc
 
 ## Configuration
 
-Both workflows are designed to be called from other workflows with specific inputs. Refer to the workflow YAML files for detailed configuration options.
+These workflows are designed to be called from other workflows with specific inputs. Refer to the workflow YAML files for detailed configuration options.
