@@ -1,0 +1,172 @@
+name: Generated types model overlap
+
+on:
+  workflow_call:
+    inputs:
+      project_root:
+        description: Directory containing @fylein/types in node_modules
+        required: false
+        type: string
+        default: "."
+      tsconfig_path:
+        description: TypeScript configuration used to resolve local model types
+        required: false
+        type: string
+        default: tsconfig.json
+      install_filter:
+        description: Optional pnpm workspace package filter
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  packages: read
+  pull-requests: write
+
+jobs:
+  model_changes:
+    name: Detect changed model files
+    runs-on: ubuntu-latest
+    outputs:
+      any_changed: ${{ steps.changed_files.outputs.any_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fetch merge queue base
+        if: github.event_name == 'merge_group'
+        run: git fetch --depth=1 origin "${{ github.event.merge_group.base_sha }}"
+
+      - name: Check for model changes
+        id: changed_files
+        uses: tj-actions/changed-files@v47
+        with:
+          base_sha: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
+          files: "**/*.model.ts"
+
+  analyze:
+    needs: model_changes
+    if: needs.model_changes.outputs.any_changed == 'true'
+    name: Check generated type overlap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve workflows repository ref
+        id: workflows_ref
+        env:
+          WORKFLOW_REF: ${{ github.workflow_ref }}
+        run: |
+          ref="${WORKFLOW_REF##*@}"
+          if [[ -z "$ref" || "$ref" == refs/pull/* || "$ref" == refs/heads/gh-readonly-queue/* ]]; then
+            ref=master
+          elif [[ "$ref" == refs/heads/* ]]; then
+            ref="${ref#refs/heads/}"
+          elif [[ "$ref" == refs/tags/* ]]; then
+            ref="${ref#refs/tags/}"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout workflow tools
+        uses: actions/checkout@v6
+        with:
+          repository: fylein/workflows
+          ref: ${{ steps.workflows_ref.outputs.ref }}
+          path: .generated-types-workflow
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install analysis dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+          INSTALL_FILTER: ${{ inputs.install_filter }}
+        run: |
+          args=(--frozen-lockfile --ignore-scripts)
+          if [[ -n "$INSTALL_FILTER" ]]; then
+            args+=(--filter "$INSTALL_FILTER")
+          fi
+          pnpm install "${args[@]}"
+
+      - name: Compare changed models with generated types
+        env:
+          BASE_SHA: ${{ github.event_name == 'merge_group' && github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          PROJECT_ROOT: ${{ inputs.project_root }}
+          TSCONFIG_PATH: ${{ inputs.tsconfig_path }}
+          REPORT_PATH: ${{ runner.temp }}/generated-type-overlap.json
+          COMMENT_PATH: ${{ runner.temp }}/generated-type-overlap.md
+        run: |
+          node .generated-types-workflow/scripts/check-generated-type-overlap.mjs \
+            --base "$BASE_SHA" \
+            --threshold 60 \
+            --min-keys 3 \
+            --types-directory "$PROJECT_ROOT/node_modules/@fylein/types/dist" \
+            --tsconfig "$TSCONFIG_PATH" \
+            --json "$REPORT_PATH" \
+            --markdown "$COMMENT_PATH"
+
+      - name: Publish approval requirement
+        id: result
+        env:
+          REPORT_PATH: ${{ runner.temp }}/generated-type-overlap.json
+        run: echo "requires-review=$(jq -r '.requiresReview' "$REPORT_PATH")" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update PR comment
+        if: github.event_name != 'merge_group'
+        uses: actions/github-script@v8
+        env:
+          COMMENT_PATH: ${{ runner.temp }}/generated-type-overlap.md
+          REPORT_PATH: ${{ runner.temp }}/generated-type-overlap.json
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const scriptUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/.generated-types-workflow/scripts/generated-types-model-overlap-workflow.mjs`,
+            ).href;
+            const { publishGeneratedTypeOverlap } = await import(scriptUrl);
+            await publishGeneratedTypeOverlap({
+              github,
+              context,
+              commentPath: process.env.COMMENT_PATH,
+              reportPath: process.env.REPORT_PATH,
+            });
+
+      - name: Verify generated-types team approval
+        if: github.event_name != 'merge_group' && steps.result.outputs.requires-review == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const scriptUrl = pathToFileURL(
+              `${process.env.GITHUB_WORKSPACE}/.generated-types-workflow/scripts/generated-types-model-overlap-workflow.mjs`,
+            ).href;
+            const { verifyGeneratedTypesApproval } = await import(scriptUrl);
+            await verifyGeneratedTypesApproval({ github, context, core });
+
+  status:
+    name: Generated types model overlap
+    needs: [model_changes, analyze]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify workflow result
+        env:
+          DETECTION_RESULT: ${{ needs.model_changes.result }}
+          ANALYSIS_RESULT: ${{ needs.analyze.result }}
+        run: |
+          if [[ "$DETECTION_RESULT" == "failure" || "$DETECTION_RESULT" == "cancelled" || \
+                "$ANALYSIS_RESULT" == "failure" || "$ANALYSIS_RESULT" == "cancelled" ]]; then
+            echo "Generated type overlap checks did not pass."
+            exit 1
+          fi
+
+          echo "Generated type overlap checks passed."
