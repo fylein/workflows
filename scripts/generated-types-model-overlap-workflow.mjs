@@ -158,6 +158,7 @@ export const verifyGeneratedTypesApproval = async ({
   const { owner, repo } = context.repo;
   const pull_number = context.issue.number;
   const headSha = context.payload.pull_request.head.sha;
+  const authorLogin = context.payload.pull_request.user.login.toLowerCase();
   const reviews = await github.paginate(github.rest.pulls.listReviews, {
     owner,
     repo,
@@ -177,6 +178,7 @@ export const verifyGeneratedTypesApproval = async ({
     (review) =>
       review.state === "APPROVED" &&
       review.commit_id === headSha &&
+      review.user.login.toLowerCase() !== authorLogin &&
       approvedReviewerLogins.has(review.user.login.toLowerCase()),
   );
 
